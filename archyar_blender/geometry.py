@@ -6,6 +6,7 @@ the later import/export stage. This add-on stores semantic Archyar IDs now.
 
 import math
 import uuid
+from mathutils import Matrix
 
 import bpy
 from mathutils import Vector
@@ -32,6 +33,12 @@ def mesh_object(name, vertices, faces, mat=None, parent=None):
     bpy.context.collection.objects.link(ob)
     if parent is not None:
         ob.parent = parent
+        # This is generated implementation geometry, never a semantic Archyar item.
+        # The selection bridge promotes clicks on it to the nearest Archyar root.
+        ob["archyar_generated_part"] = True
+        ob.lock_location = (True, True, True)
+        ob.lock_rotation = (True, True, True)
+        ob.lock_scale = (True, True, True)
     if mat is not None:
         mesh.materials.append(mat)
     return ob
@@ -115,11 +122,16 @@ def length(a, b):
 def create_wall(a, b, thickness=.15, height=3.0, preset="wall", elevation=0.0):
     if length(a, b) < .10:
         raise ValueError("Wall length must be at least 10 cm")
-    obj = mesh_object("Archyar | Wall", box_vertices(1, 1, 1), _BOX_FACES,
-                      material("Plaster", (.77, .78, .75)))
+    obj = empty("Archyar | Wall")
+    obj.empty_display_type = 'CUBE'
+    obj.empty_display_size = .18
     obj["archyar_kind"] = "WALL"
     obj["archyar_preset"] = preset
     obj["archyar_id"] = str(uuid.uuid4())
+    visual = mesh_object("Archyar | Wall Surface (generated)",
+                         box_vertices(1, 1, 1), _BOX_FACES,
+                         material("Plaster", (.77, .78, .75)), parent=obj)
+    visual["archyar_wall_visual"] = True
     wall = obj.archyar_wall
     wall.start = a
     wall.end = b
@@ -134,12 +146,15 @@ def create_wall(a, b, thickness=.15, height=3.0, preset="wall", elevation=0.0):
 def refresh_wall(obj):
     if obj is None or obj.get("archyar_kind") != "WALL":
         return
+    visual = wall_visual(obj)
+    if visual is None:
+        return  # Controller being initialized or migrated.
     wall = obj.archyar_wall
     a, b = wall.start, wall.end
     span = length(a, b)
     if span < .10:
         return
-    mesh = obj.data
+    mesh = visual.data
     mesh.clear_geometry()
     mesh.from_pydata(box_vertices(span, wall.thickness, wall.height), [], _BOX_FACES)
     mesh.update()
@@ -153,6 +168,67 @@ def refresh_wall(obj):
         for cutter in child.children:
             if cutter.get("archyar_cutter"):
                 replace_mesh(cutter, opening_profile(child, wall.thickness + .12))
+
+
+def wall_visual(root):
+    """Resolve the Blender render mesh without exposing it as the wall controller."""
+    if root is None or root.get("archyar_kind") != "WALL":
+        return None
+    if root.type == 'MESH':
+        return root  # Temporary legacy compatibility until migration.
+    return next((child for child in root.children
+                 if child.type == 'MESH' and child.get("archyar_wall_visual")), None)
+
+
+def migrate_legacy_walls():
+    """Upgrade v0.3 wall Mesh roots in existing .blend projects non-destructively.
+
+    Preserve their world transform, material, Boolean modifiers, hosted openings,
+    stable element ID and editable wall settings. The former mesh becomes a child.
+    """
+    migrated = 0
+    for visual in list(bpy.data.objects):
+        if visual.type != 'MESH' or visual.get("archyar_kind") != "WALL":
+            continue
+        state = {name: tuple(getattr(visual.archyar_wall, name)) if name in ('start', 'end')
+                 else getattr(visual.archyar_wall, name)
+                 for name in ('start', 'end', 'thickness', 'height', 'elevation', 'show_length')}
+        world = visual.matrix_world.copy()
+        children = [(child, child.matrix_basis.copy(), child.matrix_parent_inverse.copy())
+                    for child in visual.children]
+        root = bpy.data.objects.new("Archyar | Wall", None)
+        collection = visual.users_collection[0] if visual.users_collection else bpy.context.scene.collection
+        collection.objects.link(root)
+        root.empty_display_type = 'CUBE'
+        root.empty_display_size = .18
+        root["archyar_kind"] = "WALL"
+        root["archyar_preset"] = visual.get("archyar_preset", "wall")
+        root["archyar_id"] = visual.get("archyar_id", str(uuid.uuid4()))
+        root.matrix_world = world
+        # The update callback sees no visual yet, so it cannot alter old meshes.
+        for name, value in state.items():
+            setattr(root.archyar_wall, name, value)
+        visual.parent = root
+        visual.matrix_parent_inverse = Matrix.Identity(4)
+        visual.matrix_basis = Matrix.Identity(4)
+        visual["archyar_wall_visual"] = True
+        visual["archyar_generated_part"] = True
+        visual.lock_location = (True, True, True)
+        visual.lock_rotation = (True, True, True)
+        visual.lock_scale = (True, True, True)
+        del visual["archyar_kind"]
+        for key in ("archyar_id", "archyar_preset"):
+            if key in visual:
+                del visual[key]
+        visual.name = "Archyar | Wall Surface (generated)"
+        for child, basis, inverse in children:
+            child.parent = root
+            child.matrix_parent_inverse = inverse
+            child.matrix_basis = basis
+        if bpy.context.view_layer and bpy.context.view_layer.objects.active == visual:
+            select(root)
+        migrated += 1
+    return migrated
 
 
 def replace_mesh(obj, geometry):
@@ -222,7 +298,7 @@ def create_opening(wall, t, style, width, height, sill, arch_rise=None):
     cutter["archyar_cutter"] = True
     cutter.display_type = 'WIRE'
     cutter.hide_render = True
-    mod = wall.modifiers.new("Archyar | " + OPENINGS[style], 'BOOLEAN')
+    mod = wall_visual(wall).modifiers.new("Archyar | " + OPENINGS[style], 'BOOLEAN')
     mod.operation = 'DIFFERENCE'
     mod.solver = 'EXACT'
     mod.object = cutter

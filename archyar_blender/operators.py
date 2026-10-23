@@ -383,6 +383,37 @@ class ARCHYAR_OT_edit_wall_handles(bpy.types.Operator):
         return {'PASS_THROUGH'}
 
 
+class ARCHYAR_OT_rebuild_element(bpy.types.Operator):
+    bl_idname = "archyar.rebuild_element"
+    bl_label = "Repair Generated Geometry"
+    bl_description = "Recreate the protected render meshes from the Archyar parameters"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        from .selection import semantic_root
+        root = semantic_root(context.active_object)
+        if root is None:
+            return {'CANCELLED'}
+        try:
+            if root.get("archyar_kind") == 'WALL':
+                geometry.refresh_wall(root)
+            elif root.get("archyar_kind") == 'OPENING':
+                geometry.apply_opening(
+                    root, root["archyar_style"], float(root["width"]),
+                    float(root["height"]), float(root["sill"]),
+                    float(root["archyar_t"]), float(root.get("archyar_arch_rise", 0)),
+                    bool(root.get("archyar_mirrored", False)),
+                    float(root.get("archyar_open_fraction", 0)))
+            else:
+                self.report({'WARNING'}, "Repair currently supports walls, doors and windows")
+                return {'CANCELLED'}
+        except ValueError as error:
+            self.report({'ERROR'}, str(error))
+            return {'CANCELLED'}
+        geometry.select(root)
+        return {'FINISHED'}
+
+
 class _ViewportPlacement:
     _start = None
     _current = None
@@ -716,6 +747,13 @@ class VIEW3D_PT_archyar(bpy.types.Panel):
             layout.label(text="Click to place more; Esc ends tool")
         if abs(scene.unit_settings.scale_length - 1) > 1e-6:
             layout.label(text="Set scene unit scale to 1.0", icon='ERROR')
+        from . import view_modes
+        row = layout.row(align=True)
+        if view_modes.is_plan_view(context.area):
+            row.operator("archyar.restore_view", text="Return to 3D", icon='VIEW_PERSPECTIVE')
+        else:
+            row.operator("archyar.plan_view", text="2D Floor Plan", icon='VIEW_ORTHO')
+        layout.prop(scene, "archyar_show_wall_handles", text="Wall Handles on Selection")
         layout.prop(scene, "archyar_section", expand=True)
         if scene.archyar_section == 'BUILD':
             layout.prop(scene, "archyar_level_elevation")
@@ -782,7 +820,6 @@ class VIEW3D_PT_archyar_edit(bpy.types.Panel):
     bl_parent_id = "VIEW3D_PT_archyar"
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
-    bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context):
         layout = self.layout
@@ -796,7 +833,9 @@ class VIEW3D_PT_archyar_edit(bpy.types.Panel):
                 layout.prop(props, field)
             layout.label(text="Length: %.3f m" % geometry.length(props.start, props.end))
             layout.operator("archyar.set_wall_length", text="Set Exact Length")
-            layout.operator("archyar.edit_wall_handles", text="Drag Wall Handles")
+            layout.label(text="Blue ends / orange centre: drag to edit")
+            layout.operator("archyar.edit_wall_handles", text="Legacy Drag Mode (Esc reverts)")
+            layout.operator("archyar.rebuild_element", text="Repair Wall Surface", icon='FILE_REFRESH')
         elif obj.get("archyar_kind") == "STAIRS":
             props = obj.archyar_stair
             for field in ('run', 'width', 'rise', 'count', 'filled'):
@@ -817,13 +856,15 @@ class VIEW3D_PT_archyar_edit(bpy.types.Panel):
                 layout.prop(props, 'mirrored')
                 layout.prop(props, 'open_fraction')
             layout.operator('archyar.edit_opening', icon='CHECKMARK')
+            layout.operator('archyar.rebuild_element', text="Repair Door / Window", icon='FILE_REFRESH')
         else:
             layout.label(text="Select a wall, stair, door or window")
 
 
 CLASSES = (ArchyarWallSettings, ArchyarStairSettings, ArchyarOpeningSettings,
            ARCHYAR_OT_edit_opening, ARCHYAR_OT_load_opening,
-           ARCHYAR_OT_set_wall_length, ARCHYAR_OT_edit_wall_handles, ARCHYAR_OT_draw_wall,
+           ARCHYAR_OT_set_wall_length, ARCHYAR_OT_edit_wall_handles, ARCHYAR_OT_rebuild_element,
+           ARCHYAR_OT_draw_wall,
            ARCHYAR_OT_place_opening, ARCHYAR_OT_place_furniture,
            ARCHYAR_OT_place_structure, VIEW3D_PT_archyar, VIEW3D_PT_archyar_edit)
 
@@ -843,6 +884,7 @@ def register():
         (key, label, label) for key, (label, _) in WALL_PRESETS.items()], update=_preset_change)
     bpy.types.Scene.archyar_thickness = FloatProperty(name="Wall Thickness", default=.15, min=.04, max=1, unit='LENGTH')
     bpy.types.Scene.archyar_active_tool = StringProperty(name="Active Archyar Tool", default="")
+    bpy.types.Scene.archyar_show_wall_handles = BoolProperty(name="Wall Handles", default=True)
     bpy.types.Scene.archyar_level_elevation = FloatProperty(name="Active Level (Z)", default=0, min=-100, max=100, unit='LENGTH')
     bpy.types.Scene.archyar_show_grid = BoolProperty(name="Show Grid", default=True)
     bpy.types.Scene.archyar_snap_grid = BoolProperty(name="Snap to Grid", default=True)
@@ -865,6 +907,7 @@ def unregister():
     for name in ("archyar_stair_filled", "archyar_stair_count", "archyar_stair_rise",
                  "archyar_stair_width", "archyar_stair_run", "archyar_furn_category", "archyar_sill", "archyar_open_height",
                   "archyar_open_width", "archyar_height", "archyar_thickness", "archyar_active_tool",
+                  "archyar_show_wall_handles",
                   "archyar_level_elevation", "archyar_show_grid", "archyar_snap_grid",
                   "archyar_snap_points", "archyar_grid_step",
                  "archyar_wall_preset", "archyar_section"):

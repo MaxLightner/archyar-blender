@@ -1,4 +1,4 @@
-# Archyar modeling contract — v0.3.0
+# Archyar modeling contract — v0.4.0
 
 This contract applies to both `MaxLightner/archyar-blender` and `MaxLightner/archyar`.
 Any behavioral change to an opening, wall, stair or catalog asset must be reviewed in **both** repositories, even before model import/export is enabled.
@@ -20,6 +20,8 @@ Any behavioral change to an opening, wall, stair or catalog asset must be review
 | Wall numeric length | Post-drawing numeric length edit must allow a fixed start or end. The other connected joint follows; never require a numeric length before drawing. |
 | Floor grid | A metric reference plane independent of calibration and project coordinates, with a separately configurable snap behavior. Blender uses a configurable default 10 cm interval; Android's plan and AR overlay use 25 cm subdivisions and 1 m major lines. Floor/storey elevation selects the current editing plane. |
 | AR plane visualization | Only the centered circular floor marker and an unbounded, thin metric grid: no ARCore detected-plane polygon and no circular fading mask. Camera hit-test tracking may still rely on ARCore plane polygons internally. |
+| Semantic selection | A wall, door, window or furniture item is selected as one Archyar element with stable ID and parameter metadata, regardless of the number of generated render mesh pieces. Geometry must not become the authoritative source of dimensions. |
+| 2D plan | Blender top orthographic is a distinct view of the same X/Y semantic model, with architectural wall outlines and opening markers. It must not duplicate or recalculate model coordinates and must coexist with the 3D view. |
 
 Stair-filled state is represented in Android's existing `WorkspaceModel.Item.style` string, already saved by `ProjectSnapshotCodec` version 1. No snapshot schema migration is needed. Blender stores the equivalent as `archyar_stair_style`. The apps do not yet exchange objects; this documents their matching logic for future import/export.
 

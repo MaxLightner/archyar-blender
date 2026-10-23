@@ -7,7 +7,7 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE = ROOT / "archyar_blender"
-OUTPUT = ROOT / "dist" / "archyar-blender-v0.3.0.zip"
+OUTPUT = ROOT / "dist" / "archyar-blender-v0.4.0.zip"
 
 
 def build():

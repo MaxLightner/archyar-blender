@@ -6,10 +6,66 @@ from bpy_extras.view3d_utils import location_3d_to_region_2d
 from mathutils import Vector
 
 from .geometry import length
+from . import view_modes
 
 
 _handler = None
 _grid_handler = None
+_plan_handler = None
+
+
+def _draw_plan_lines():
+    """Metric wall outlines and readable door/window symbols in top view."""
+    context = bpy.context
+    if not view_modes.is_plan_view(context.area):
+        return
+    import gpu
+    from gpu_extras.batch import batch_for_shader
+
+    outlines, openings = [], []
+    level = context.scene.archyar_level_elevation
+    for wall in context.visible_objects:
+        if wall.get("archyar_kind") != "WALL":
+            continue
+        data = wall.archyar_wall
+        if abs(data.elevation - level) > .001:
+            continue
+        a, b = Vector(data.start), Vector(data.end)
+        delta = b - a
+        if delta.length < .1:
+            continue
+        direction = delta.normalized()
+        across = Vector((-direction.y, direction.x)) * data.thickness / 2
+        corners = (a + across, b + across, b - across, a - across)
+        z = data.elevation + data.height + .06
+        for index in range(4):
+            start, end = corners[index], corners[(index + 1) % 4]
+            outlines.extend(((start.x, start.y, z), (end.x, end.y, z)))
+        for child in wall.children:
+            if child.get("archyar_kind") != "OPENING":
+                continue
+            t = float(child.get("archyar_t", .5))
+            half = float(child.get("width", .9)) / 2
+            center = a + delta * t
+            for side in (-1, 1):
+                edge = center + direction * half * side
+                openings.extend(((edge.x - across.x * 1.25, edge.y - across.y * 1.25, z + .01),
+                                 (edge.x + across.x * 1.25, edge.y + across.y * 1.25, z + .01)))
+            left, right = center - direction * half, center + direction * half
+            openings.extend(((left.x, left.y, z + .01), (right.x, right.y, z + .01)))
+
+    shader = gpu.shader.from_builtin('UNIFORM_COLOR')
+    gpu.state.blend_set('ALPHA')
+    gpu.state.depth_test_set('NONE')
+    for vertices, color in ((outlines, (.12, .78, 1., .95)),
+                            (openings, (1., .68, .24, 1.))):
+        if vertices:
+            batch = batch_for_shader(shader, 'LINES', {"pos": vertices})
+            shader.bind()
+            shader.uniform_float('color', color)
+            batch.draw(shader)
+    gpu.state.depth_test_set('LESS_EQUAL')
+    gpu.state.blend_set('NONE')
 
 
 def _draw_construction_grid():
@@ -92,20 +148,26 @@ def _draw_labels():
 
 
 def register():
-    global _handler, _grid_handler
+    global _handler, _grid_handler, _plan_handler
     if not bpy.app.background and _handler is None:
         _handler = bpy.types.SpaceView3D.draw_handler_add(
             _draw_labels, (), 'WINDOW', 'POST_PIXEL')
     if not bpy.app.background and _grid_handler is None:
         _grid_handler = bpy.types.SpaceView3D.draw_handler_add(
             _draw_construction_grid, (), 'WINDOW', 'POST_VIEW')
+    if not bpy.app.background and _plan_handler is None:
+        _plan_handler = bpy.types.SpaceView3D.draw_handler_add(
+            _draw_plan_lines, (), 'WINDOW', 'POST_VIEW')
 
 
 def unregister():
-    global _handler, _grid_handler
+    global _handler, _grid_handler, _plan_handler
     if _handler is not None:
         bpy.types.SpaceView3D.draw_handler_remove(_handler, 'WINDOW')
         _handler = None
     if _grid_handler is not None:
         bpy.types.SpaceView3D.draw_handler_remove(_grid_handler, 'WINDOW')
         _grid_handler = None
+    if _plan_handler is not None:
+        bpy.types.SpaceView3D.draw_handler_remove(_plan_handler, 'WINDOW')
+        _plan_handler = None
