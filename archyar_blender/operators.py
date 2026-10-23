@@ -183,6 +183,9 @@ class ARCHYAR_OT_element_popup(bpy.types.Operator):
             p = root.archyar_stair
             for field in ('run', 'width', 'rise', 'count', 'filled'):
                 layout.prop(p, field)
+        elif kind in {'MEP_ROUTE', 'WALL_LIGHT'}:
+            from . import mep
+            mep.draw_inspector(layout, root)
         else:
             layout.label(text='Archyar element: ' + str(kind))
             layout.label(text='Controller placement (generated geometry stays protected)')
@@ -948,9 +951,21 @@ class VIEW3D_PT_archyar(bpy.types.Panel):
                 item = layout.operator("archyar.place_furniture", text=asset.name,
                                        icon=asset_icons.get(asset.category, 'OUTLINER_OB_MESH'))
                 item.index = asset.index
+            if scene.archyar_furn_category == 'lighting':
+                layout.operator("archyar.wall_light", text="Wall Tube Light (select wall)", icon='LIGHT_AREA')
             layout.label(text="Click in the viewport to place")
         else:
-            layout.label(text="MEP modeling in a later phase", icon='INFO')
+            from . import mep
+            layout.prop(scene, "archyar_mep_kind", text="Route Type")
+            layout.prop(scene, "archyar_mep_width", text="Width / Diameter")
+            if scene.archyar_mep_kind == 'DUCT':
+                layout.prop(scene, "archyar_mep_height", text="Section Height")
+            layout.prop(scene, "archyar_mep_elevation", text="Center Height")
+            layout.prop(scene, "archyar_mep_angle", text="Angular Snap")
+            layout.operator("archyar.draw_mep", text="Draw Service Route", icon='CURVE_PATH')
+            layout.label(text="Click corners; Enter to finish, Esc to cancel")
+            layout.separator()
+            layout.operator("archyar.wall_light", text="Wall Tube Light (select wall)", icon='LIGHT_AREA')
 
 
 class VIEW3D_PT_archyar_edit(bpy.types.Panel):
@@ -997,8 +1012,11 @@ class VIEW3D_PT_archyar_edit(bpy.types.Panel):
                 layout.operator('archyar.opening_keyframe', text='Keyframe Open Amount', icon='KEY_HLT')
             layout.operator('archyar.edit_opening', icon='CHECKMARK')
             layout.operator('archyar.rebuild_element', text="Repair Door / Window", icon='FILE_REFRESH')
+        elif obj.get("archyar_kind") in {'MEP_ROUTE', 'WALL_LIGHT'}:
+            from . import mep
+            mep.draw_inspector(layout, obj)
         else:
-            layout.label(text="Select a wall, stair, door or window")
+            layout.label(text="Select an Archyar controller")
 
 
 CLASSES = (ArchyarWallSettings, ArchyarStairSettings, ArchyarOpeningSettings,
@@ -1020,7 +1038,7 @@ def register():
         ('BUILD', "Build", "Walls and architectural parts"),
         ('OPEN', "Openings", "Doors and windows"),
         ('FURN', "Furniture", "Chido catalog"),
-        ('MEP', "Services", "Reserved for a future phase")])
+        ('MEP', "Services", "Ducts, pipes and wall-mounted lights")])
     bpy.types.Scene.archyar_wall_preset = EnumProperty(name="Wall Type", items=[
         (key, label, label) for key, (label, _) in WALL_PRESETS.items()], update=_preset_change)
     bpy.types.Scene.archyar_thickness = FloatProperty(name="Wall Thickness", default=.15, min=.04, max=1, unit='LENGTH')
