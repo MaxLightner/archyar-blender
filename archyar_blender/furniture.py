@@ -8,10 +8,10 @@ import math
 import uuid
 
 from .catalog import PALETTE, furniture
-from .geometry import box, cylinder, empty, material, select
+from .geometry import box, cylinder, empty, mark_preview, material, select
 
 
-def make_furniture(index, location=(0, 0, 0), parent=None):
+def make_furniture(index, location=(0, 0, 0), parent=None, preview=False):
     asset = furniture(index)
     root = empty("Archyar | " + asset.name, location, parent=parent)
     root["archyar_kind"] = "FURNITURE"
@@ -117,5 +117,8 @@ def make_furniture(index, location=(0, 0, 0), parent=None):
     # The source app offers four swatches; preserve them as a semantic ID.
     root["archyar_palette_index"] = 0
     root["archyar_palette_rgb"] = list(PALETTE[0])
-    select(root)
+    if preview:
+        mark_preview(root, True)
+    else:
+        select(root)
     return root

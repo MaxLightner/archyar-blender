@@ -25,38 +25,38 @@ class Asset:
 
 
 FURNITURE = (
-    Asset(0, "کاناپه", "seating", "sofa", 2.10, .85, .90),
-    Asset(1, "تک‌نفره", "seating", "armchair", .90, .85, .90),
-    Asset(2, "میز", "tables", "table", 1.10, .40, .60),
-    Asset(3, "تک‌نفره دوم", "seating", "armchair", .90, .85, .90),
-    Asset(4, "گلدان سرامیکی", "decor", "vase", .25, .40, .25),
-    Asset(5, "کوسن دکوراتیو", "decor", "pillow", .46, .18, .40),
-    Asset(6, "آباژور ایستاده", "lighting", "floor-lamp", .45, 1.55, .45),
-    Asset(7, "فرش مینیمال", "rugs", "rug", 2.40, .015, 1.70),
-    Asset(8, "تخت دو نفره", "bedroom", "bed", 1.65, .95, 2.08),
-    Asset(9, "میز کار", "workspace", "desk", 1.40, .74, .67),
-    Asset(10, "میز ناهارخوری", "dining", "dining-table", 1.70, .75, .86),
-    Asset(11, "صندلی ناهارخوری", "dining", "chair", .48, .90, .47),
-    Asset(12, "میز عسلی مربعی", "tables", "side-table", .48, .48, .48),
-    Asset(13, "میز جلو مبلی مربعی", "tables", "coffee-table", 1.15, .42, 1.15),
-    Asset(14, "آباژور رومیزی", "lighting", "desk-lamp", .35, .55, .35),
-    Asset(15, "آباژور سه‌پایه", "lighting", "tripod-lamp", .55, 1.60, .55),
-    Asset(16, "تابلو عمودی کوچک", "wall-art", "art", .45, .68, .045, True),
-    Asset(17, "تابلو افقی کوچک", "wall-art", "art", .70, .44, .045, True),
-    Asset(18, "تابلو مربعی متوسط", "wall-art", "art", .65, .65, .045, True),
-    Asset(19, "تابلو افقی بزرگ", "wall-art", "art", 1.20, .68, .045, True),
-    Asset(20, "تابلو عمودی بزرگ", "wall-art", "art", .78, 1.15, .045, True),
-    Asset(21, "تابلو سه‌تکه", "wall-art", "triptych", 1.25, .75, .045, True),
+    Asset(0, "Sofa", "seating", "sofa", 2.10, .85, .90),
+    Asset(1, "Armchair", "seating", "armchair", .90, .85, .90),
+    Asset(2, "Table", "tables", "table", 1.10, .40, .60),
+    Asset(3, "Armchair Variant", "seating", "armchair", .90, .85, .90),
+    Asset(4, "Ceramic Vase", "decor", "vase", .25, .40, .25),
+    Asset(5, "Decorative Cushion", "decor", "pillow", .46, .18, .40),
+    Asset(6, "Floor Lamp", "lighting", "floor-lamp", .45, 1.55, .45),
+    Asset(7, "Minimal Rug", "rugs", "rug", 2.40, .015, 1.70),
+    Asset(8, "Double Bed", "bedroom", "bed", 1.65, .95, 2.08),
+    Asset(9, "Desk", "workspace", "desk", 1.40, .74, .67),
+    Asset(10, "Dining Table", "dining", "dining-table", 1.70, .75, .86),
+    Asset(11, "Dining Chair", "dining", "chair", .48, .90, .47),
+    Asset(12, "Square Side Table", "tables", "side-table", .48, .48, .48),
+    Asset(13, "Square Coffee Table", "tables", "coffee-table", 1.15, .42, 1.15),
+    Asset(14, "Table Lamp", "lighting", "desk-lamp", .35, .55, .35),
+    Asset(15, "Tripod Lamp", "lighting", "tripod-lamp", .55, 1.60, .55),
+    Asset(16, "Small Portrait Art", "wall-art", "art", .45, .68, .045, True),
+    Asset(17, "Small Landscape Art", "wall-art", "art", .70, .44, .045, True),
+    Asset(18, "Medium Square Art", "wall-art", "art", .65, .65, .045, True),
+    Asset(19, "Large Landscape Art", "wall-art", "art", 1.20, .68, .045, True),
+    Asset(20, "Large Portrait Art", "wall-art", "art", .78, 1.15, .045, True),
+    Asset(21, "Triptych Art", "wall-art", "triptych", 1.25, .75, .045, True),
 )
 
 CATEGORY_NAMES = {
-    "seating": "نشیمن", "tables": "میزها", "decor": "دکور", "lighting": "روشنایی",
-    "rugs": "فرش", "bedroom": "اتاق خواب", "workspace": "میز کار",
-    "dining": "غذاخوری", "wall-art": "تابلو دیواری",
+    "seating": "Seating", "tables": "Tables", "decor": "Decor", "lighting": "Lighting",
+    "rugs": "Rugs", "bedroom": "Bedroom", "workspace": "Workspace",
+    "dining": "Dining", "wall-art": "Wall Art",
 }
-WALL_PRESETS = {"wall": ("دیوار هبلکس", .15), "partition": ("تیغه داخلی", .10), "block": ("دیوار بلوکی", .20)}
-OPENINGS = {"fixed": "پنجره ثابت", "sliding": "پنجره کشویی", "hinged": "پنجره لولایی", "arched": "پنجره قوسی", "door": "در لولایی", "sliding-door": "در کشویی"}
-BUILD_PARTS = {"column": "ستون", "floor": "کف", "ceiling": "سقف", "stairs": "پله مستقیم", "railing": "نرده"}
+WALL_PRESETS = {"wall": ("Aerated Block Wall", .15), "partition": ("Interior Partition", .10), "block": ("Concrete Block Wall", .20)}
+OPENINGS = {"fixed": "Fixed Window", "sliding": "Sliding Window", "hinged": "Hinged Window", "arched": "Arched Window", "door": "Hinged Door", "sliding-door": "Sliding Door"}
+BUILD_PARTS = {"column": "Column", "floor": "Floor", "ceiling": "Ceiling", "stairs": "Straight Stair", "railing": "Railing"}
 
 
 def furniture(index):

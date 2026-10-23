@@ -10,7 +10,9 @@ import uuid
 import bpy
 from mathutils import Vector
 
-from .catalog import FURNITURE, OPENINGS
+from .catalog import OPENINGS
+from .constraints import (STAIR_FILLED, STAIR_OPEN, STAIR_TREAD_THICKNESS,
+                          opening_position, require_stair)
 
 
 def material(name, rgb, alpha=1.0):
@@ -84,6 +86,25 @@ def select(obj):
         bpy.context.view_layer.objects.active = obj
 
 
+def remove_tree(root):
+    """Remove only objects owned by a transient or regenerated Archyar root."""
+    for child in list(root.children):
+        remove_tree(child)
+    bpy.data.objects.remove(root, do_unlink=True)
+
+
+def mark_preview(root, enabled):
+    root["archyar_preview"] = enabled
+    nested = [root]
+    while nested:
+        item = nested.pop()
+        nested.extend(list(item.children))
+        item.hide_select = enabled
+        if item.type == 'MESH':
+            item.display_type = 'WIRE' if enabled else 'TEXTURED'
+            item.hide_render = enabled
+
+
 def length(a, b):
     return math.hypot(b[0] - a[0], b[1] - a[1])
 
@@ -141,7 +162,7 @@ def opening_profile(root, depth):
     style = root["archyar_style"]
     if style != "arched":
         return box_vertices(w, depth, h), _BOX_FACES
-    rise = min(.25, h * .35)
+    rise = float(root.get("archyar_arch_rise", min(.25, h * .35)))
     # Convex polygon in X/Z, with an approximately semicircular crown.
     n = 12
     profile = [(-w / 2, -h / 2), (w / 2, -h / 2),
@@ -165,24 +186,21 @@ def reposition_opening(root, wall):
                      float(root["sill"]) + float(root["height"]) / 2 - wall.archyar_wall.height / 2)
 
 
-def create_opening(wall, t, style, width, height, sill):
+def _validated_t(wall, t, style, width, height, sill, arch_rise, excluding=None):
+    others = [(float(c["archyar_t"]), float(c["width"]))
+              for c in wall.children if c is not excluding and c.get("archyar_kind") == "OPENING"]
+    return opening_position(length(wall.archyar_wall.start, wall.archyar_wall.end),
+                            wall.archyar_wall.height, width, height, sill,
+                            style, arch_rise, t, others)
+
+
+def create_opening(wall, t, style, width, height, sill, arch_rise=None):
     if wall is None or wall.get("archyar_kind") != "WALL":
         raise ValueError("Select an Archyar wall first")
     if style not in OPENINGS:
         raise ValueError("Unknown opening type")
-    span = length(wall.archyar_wall.start, wall.archyar_wall.end)
-    if (width < .3 or height < .3 or sill < 0 or width > span - .2
-            or sill + height > wall.archyar_wall.height):
-        raise ValueError("Opening dimensions do not fit this wall")
-    if style in ("door", "sliding-door") and sill > .01:
-        raise ValueError("Doors must start at floor level")
-    margin = (width / 2 + .1) / span
-    if not margin <= t <= 1 - margin:
-        raise ValueError("Leave 10 cm between opening and wall end")
-    for other in wall.children:
-        if other.get("archyar_kind") == "OPENING":
-            if abs((t - float(other["archyar_t"])) * span) < (width + float(other["width"])) / 2 + .05:
-                raise ValueError("Openings cannot overlap")
+    rise = min(.25, height * .35) if style == "arched" and arch_rise is None else (arch_rise or 0.0)
+    t = _validated_t(wall, t, style, width, height, sill, rise)
     root = empty("Archyar | " + OPENINGS[style], parent=wall)
     root["archyar_kind"] = "OPENING"
     root["archyar_id"] = str(uuid.uuid4())
@@ -191,6 +209,9 @@ def create_opening(wall, t, style, width, height, sill):
     root["width"] = float(width)
     root["height"] = float(height)
     root["sill"] = float(sill)
+    root["archyar_arch_rise"] = float(rise)
+    root["archyar_mirrored"] = False
+    root["archyar_open_fraction"] = 0.0
     reposition_opening(root, wall)
     cutter = mesh_object("Archyar | Opening Cutter", *opening_profile(root, wall.archyar_wall.thickness + .12), parent=root)
     cutter["archyar_cutter"] = True
@@ -201,12 +222,55 @@ def create_opening(wall, t, style, width, height, sill):
     mod.solver = 'EXACT'
     mod.object = cutter
     cutter.hide_set(True)
-    _opening_visual(root, style, width, height, wall.archyar_wall.thickness)
+    _opening_visual(root, style, width, height, wall.archyar_wall.thickness, rise)
     select(root)
     return root
 
 
-def _opening_visual(root, style, w, h, depth):
+def preview_opening(wall, style, width, height, sill):
+    root = empty("Archyar | Opening Preview", parent=wall)
+    root["archyar_preview"] = True
+    rise = min(.25, height * .35) if style == "arched" else 0
+    root["archyar_style"] = style
+    root["archyar_arch_rise"] = rise
+    root["width"] = width
+    root["height"] = height
+    root["sill"] = sill
+    root["archyar_t"] = .5
+    reposition_opening(root, wall)
+    _opening_visual(root, style, width, height, wall.archyar_wall.thickness, rise)
+    mark_preview(root, True)
+    return root
+
+
+def apply_opening(root, style, width, height, sill, t, arch_rise, mirrored=False, open_fraction=0):
+    """Validate all edited properties before mutating any visible model data."""
+    wall = root.parent
+    if root.get("archyar_kind") != "OPENING" or wall is None or wall.get("archyar_kind") != "WALL":
+        raise ValueError("Select an Archyar opening hosted by a wall")
+    if style not in OPENINGS or not 0 <= open_fraction <= 1:
+        raise ValueError("Invalid opening type or open fraction")
+    adjusted = _validated_t(wall, t, style, width, height, sill, arch_rise, root)
+    root["archyar_style"] = style
+    root["width"] = float(width)
+    root["height"] = float(height)
+    root["sill"] = float(sill)
+    root["archyar_t"] = adjusted
+    root["archyar_arch_rise"] = float(arch_rise)
+    root["archyar_mirrored"] = bool(mirrored)
+    root["archyar_open_fraction"] = float(open_fraction)
+    root.name = "Archyar | " + OPENINGS[style]
+    reposition_opening(root, wall)
+    for child in list(root.children):
+        if child.get("archyar_cutter"):
+            replace_mesh(child, opening_profile(root, wall.archyar_wall.thickness + .12))
+        else:
+            remove_tree(child)
+    _opening_visual(root, style, width, height, wall.archyar_wall.thickness, arch_rise)
+    return root
+
+
+def _opening_visual(root, style, w, h, depth, arch_rise=0):
     frame = material("Frame", (.18, .23, .25))
     glass = material("Glass blue", (.35, .67, .74), .5)
     wood = material("Door wood", (.54, .36, .24))
@@ -218,7 +282,7 @@ def _opening_visual(root, style, w, h, depth):
     box("Frame sill", root, (0, face_y, -h / 2 + thickness / 2),
         (w, .065, thickness), frame)
     if style == "arched":
-        rise = min(.25, h * .35)
+        rise = arch_rise
         last = (-w / 2, h / 2 - rise)
         for i in range(1, 17):
             x = -w / 2 + w * i / 16
@@ -232,17 +296,71 @@ def _opening_visual(root, style, w, h, depth):
         box("Frame lintel", root, (0, face_y, h / 2 - thickness / 2),
             (w, .065, thickness), frame)
     if style in ("door", "sliding-door"):
-        box("Door leaf", root, (0, -.018, -.015), (w - .105, .042, h - .08), wood)
-        cylinder("Door handle", root, (w * .36, face_y + .045, 0), .028, .025, frame)
+        mirrored = bool(root.get("archyar_mirrored", False))
+        fraction = float(root.get("archyar_open_fraction", 0))
+        if style == 'door':
+            sign = -1 if mirrored else 1
+            pivot = empty("Door hinge", (sign * (-w/2 + .075), 0, 0), root)
+            pivot.rotation_euler[2] = math.radians(105) * fraction * sign
+            box("Door leaf", pivot, (sign*(w-.105)/2, -.018, -.015),
+                (w-.105, .042, h-.08), wood)
+            cylinder("Door handle", pivot, (sign*(w-.20), face_y+.045, 0),
+                     .028, .025, frame)
+        else:
+            shift = fraction * (w-.12) * (-1 if mirrored else 1)
+            box("Sliding door leaf", root, (shift, -.018, -.015), (w-.105, .042, h-.08), wood)
+            cylinder("Door handle", root, (shift+w*.36, face_y+.045, 0), .028, .025, frame)
     else:
         glass_h = h - (.32 if style == "arched" else .13)
-        box("Glass", root, (0, 0, -.045 if style == "arched" else 0),
-            (w - .12, .014, glass_h), glass)
-        if style in ("sliding", "hinged"):
+        fraction = float(root.get("archyar_open_fraction", 0))
+        mirrored = bool(root.get("archyar_mirrored", False))
+        if style == 'sliding':
+            pane = (w - .14)/2
+            displacement = fraction * pane * (-1 if mirrored else 1)
+            box("Sliding pane", root, (-pane/2 + displacement, -.015, 0),
+                (pane, .014, glass_h), glass)
+            box("Fixed pane", root, (pane/2, .015, 0), (pane, .014, glass_h), glass)
             box("Middle mullion", root, (0, face_y, 0), (.044, .075, glass_h), frame)
+        elif style == 'hinged':
+            sign = -1 if mirrored else 1
+            pivot = empty("Window hinge", (sign*(-w/2+.065), 0, 0), root)
+            pivot.rotation_euler[2] = math.radians(80)*fraction*sign
+            box("Hinged pane", pivot, (sign*(w-.13)/2, 0, 0),
+                (w-.13, .014, glass_h), glass)
+        else:
+            box("Glass", root, (0, 0, -.045 if style == "arched" else 0),
+                (w - .12, .014, glass_h), glass)
 
 
-def add_structure(kind, cursor):
+def rebuild_stair(root):
+    """Open underside: 5 cm treads. Filled: solid riser blocks from floor."""
+    settings = root.archyar_stair
+    require_stair(settings.run, settings.width, settings.rise, settings.count)
+    for child in list(root.children):
+        if child.get("archyar_stair_piece"):
+            remove_tree(child)
+    mat = material("Concrete", (.62, .64, .64))
+    step_run = settings.run / settings.count
+    step_rise = settings.rise / settings.count
+    for i in range(settings.count):
+        top = (i+1) * step_rise
+        if settings.filled:
+            height = top
+            center = top / 2
+        else:
+            height = min(STAIR_TREAD_THICKNESS, top)
+            center = top - height/2
+        step = box("Stair Tread %02d" % (i+1), root,
+                   (-settings.run/2 + (i+.5)*step_run, 0, center),
+                   (step_run, settings.width, height), mat)
+        step["archyar_stair_piece"] = True
+    root["archyar_stair_style"] = STAIR_FILLED if settings.filled else STAIR_OPEN
+    root["archyar_stair_count"] = settings.count
+    if root.get("archyar_preview"):
+        mark_preview(root, True)
+
+
+def add_structure(kind, cursor, preview=False):
     stone = material("Concrete", (.62, .64, .64))
     timber = material("Timber", (.60, .46, .32))
     root = empty("Archyar | " + kind.title(), cursor)
@@ -254,12 +372,14 @@ def add_structure(kind, cursor):
     elif kind == "column":
         box("Column", root, (0, 0, 1.5), (.4, .4, 3.0), stone)
     elif kind == "stairs":
-        for i in range(10):
-            box("Step", root, (-1.35 + .30 * i, 0, .09 * (i+1)),
-                (.30, 1.0, .18 * (i+1)), stone)
+        root["archyar_preview"] = bool(preview)
+        rebuild_stair(root)
     elif kind == "railing":
         for i in range(7):
             box("Post", root, (-1.5 + .5*i, 0, .45), (.045, .045, .9), timber)
         box("Handrail", root, (0, 0, .9), (3.04, .065, .07), timber)
-    select(root)
+    if preview:
+        mark_preview(root, True)
+    else:
+        select(root)
     return root

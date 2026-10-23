@@ -1,27 +1,29 @@
-# Archyar Blender — 0.1.0
+# Archyar Blender — 0.2.0
 
 The first installable Archyar modeling add-on for Blender 4.3+ (designed around Blender 4.5). The goal of this stage is **modeling and browsing the shared catalog**. Archyar project import/export is deliberately not included yet.
 
 ## Install once
 
 1. Open this repo's **Actions → Archyar Blender add-on package → latest successful run**.
-2. Download `archyar-blender-install`, unzip the downloaded *GitHub artifact* once, and keep the inner `archyar-blender-v0.1.0.zip` intact.
+2. Download `archyar-blender-install`, unzip the downloaded *GitHub artifact* once, and keep the inner `archyar-blender-v0.2.0.zip` intact.
 3. In Blender: **Edit → Preferences → Add-ons → Install from Disk**, select the inner ZIP, then enable **Archyar — Architectural Modeling**.
 4. In any 3D viewport press **N → Archyar**.
 
-For a local build, run `python scripts/build_zip.py` and install `dist/archyar-blender-v0.1.0.zip`. The standard-library test is `python -m unittest discover -s tests -v`.
+For a local build, run `python scripts/build_zip.py` and install `dist/archyar-blender-v0.2.0.zip`. The standard-library test is `python -m unittest discover -s tests -v`.
 
 ## Modeling
 
 | Group | Current behavior |
 | --- | --- |
-| Build | Choose 10, 15, or 20 cm wall preset, override thickness and height, then click start/end points on XY ground. Continue chaining walls; Enter finishes. 3D lengths are persistently drawn above walls. |
-| Openings | Choose fixed/sliding/hinged/arched window or hinged/sliding door; select a wall, press the tool, then click along its plan position. Opening cuts the wall with a non-destructive Boolean modifier. |
-| Furniture | Nine category groups contain the **same 22 catalog items, IDs, and exact dimensions** as the Android app. Click an item, then click the ground to place it. Wall-art items attach to a selected Archyar wall. |
-| Other elements | Basic floor, ceiling, column, straight stair, and railing constructors. These are fixed-size preview primitives, **not complete parametric tools yet**. |
+| Build | Choose 10, 15, or 20 cm wall preset, override thickness and height, then click start/end points on XY ground. A 3D wall-outline preview follows the cursor. Continue chaining walls; Enter finishes. Wall lengths are always drawn above walls. |
+| Openings | Choose fixed/sliding/hinged/arched window or hinged/sliding door; select a wall and see a wireframe model following the intended opening before clicking. A non-destructive Boolean cuts the wall. Select the placed opening to edit width, height, sill, distance from wall start, type, arch rise and opening amount. |
+| Furniture | Nine category groups contain the **same 22 catalog items, IDs, and exact dimensions** as the Android app. Every furniture asset follows the cursor as a 3D wire preview before placement. Wall art attaches to a selected Archyar wall. |
+| Other elements | Floor, ceiling, column and railing primitives have wire previews. Straight stairs have live-editable run, width, total rise and step count, with a **Filled Underside** checkbox (unchecked initially). |
 | Services | Visible as a future category, but actual MEP route drawing is not yet implemented. |
 
-To edit a wall later, select it, expand **Archyar → Selected Wall** and change its endpoints, height, thickness, or label visibility. Connected endpoints snap within 12 cm while drawing. Press Ctrl when placing a point for a 10 cm grid. All dimensions are in metres, and **Scene → Units → Unit Scale must be 1.0**.
+To edit an element later, select its Archyar root (the parent Empty for stairs and openings), expand **Archyar → Selected Archyar Element** and change its properties. For existing openings saved by v0.1, press **Load Selected Values** before making edits. Connected wall endpoints snap within 12 cm while drawing. Press Ctrl when placing a wall point for a 10 cm grid. All dimensions are in metres, and **Scene → Units → Unit Scale must be 1.0**.
+
+Blender's visible asset names and UI controls are in English. Stable catalog IDs, geometry dimensions and opening-type codes remain identical to the Android implementation. See [the cross-app model contract](docs/MODEL_CONTRACT.md).
 
 ## Updates without reinstalling
 
