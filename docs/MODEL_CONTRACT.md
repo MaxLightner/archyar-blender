@@ -1,4 +1,4 @@
-# Archyar modeling contract — v0.5.0
+# Archyar modeling contract — v0.6.0
 
 This contract applies to both `MaxLightner/archyar-blender` and `MaxLightner/archyar`.
 Any behavioral change to an opening, wall, stair or catalog asset must be reviewed in **both** repositories, even before model import/export is enabled.
@@ -19,6 +19,9 @@ Any behavioral change to an opening, wall, stair or catalog asset must be review
 | Wall handles | Move a wall's start/end or whole segment using on-canvas handles. Coincident connected endpoints at the same level move together. Validate wall length (≥10 cm), hosted opening clearances and existing locks **before** committing; one gesture is one Undo step. |
 | Wall numeric length | Post-drawing numeric length edit must allow a fixed start or end. The other connected joint follows; never require a numeric length before drawing. |
 | Floor grid | A metric reference plane independent of calibration and project coordinates, with a separately configurable snap behavior. Blender uses a configurable default 10 cm interval; Android's plan and AR overlay use 25 cm subdivisions and 1 m major lines. Floor/storey elevation selects the current editing plane. |
+| Building floors | Each floor has its own stable identity, name, real elevation and storey height. The active floor is the edit target; other floors remain visible in the overall 3D building unless explicitly hidden. Hosted openings inherit the wall's floor. Android already persists floors in the project model; Blender v0.6 introduces floor controllers but interchange format is still pending. |
+| Per-floor AR | Spatial calibration must be invalidated on any floor switch. Entering another floor starts a fresh ARCore session, resets drawing/editing state, and requires new reference calibration for that floor. |
+| AR miniature | A display-only model scale, user-configurable from 1:2 through 1:100 (default 1:5), interpolates in 4 seconds between true 1:1 and miniature. The active floor's calibrated physical origin is the pivot; all floors are visible with scaled relative elevations. Stored geometry and calibration stay strictly metric. |
 | AR plane visualization | Only the centered circular floor marker and an unbounded, thin metric grid: no ARCore detected-plane polygon and no circular fading mask. Camera hit-test tracking may still rely on ARCore plane polygons internally. |
 | Semantic selection | A wall, door, window or furniture item is selected as one Archyar element with stable ID and parameter metadata, regardless of the number of generated render mesh pieces. Geometry must not become the authoritative source of dimensions. |
 | 2D plan | Blender top orthographic is a distinct view of the same X/Y semantic model, with architectural wall outlines and opening markers. It must not duplicate or recalculate model coordinates and must coexist with the 3D view. |

@@ -1,15 +1,15 @@
-# Archyar Blender — 0.5.0
+# Archyar Blender — 0.6.0
 
 The first installable Archyar modeling add-on for Blender 4.3+ (designed around Blender 4.5). The goal of this stage is **modeling and browsing the shared catalog**. Archyar project import/export is deliberately not included yet.
 
 ## Install once
 
 1. Open this repo's **Actions → Archyar Blender add-on package → latest successful run**.
-2. Download `archyar-blender-install`, unzip the downloaded *GitHub artifact* once, and keep the inner `archyar-blender-v0.5.0.zip` intact.
+2. Download `archyar-blender-install`, unzip the downloaded *GitHub artifact* once, and keep the inner `archyar-blender-v0.6.0.zip` intact.
 3. In Blender: **Edit → Preferences → Add-ons → Install from Disk**, select the inner ZIP, then enable **Archyar — Architectural Modeling**.
 4. In any 3D viewport press **N → Archyar**.
 
-For a local build, run `python scripts/build_zip.py` and install `dist/archyar-blender-v0.5.0.zip`. The standard-library test is `python -m unittest discover -s tests -v`.
+For a local build, run `python scripts/build_zip.py` and install `dist/archyar-blender-v0.6.0.zip`. The standard-library test is `python -m unittest discover -s tests -v`.
 
 ## Selection and editing: architectural controllers
 
@@ -30,7 +30,16 @@ For a local build, run `python scripts/build_zip.py` and install `dist/archyar-b
 | Other elements | Floor, ceiling, column and railing primitives have wire previews. Straight stairs have live-editable run, width, total rise and step count, with a **Filled Underside** checkbox (unchecked initially). |
 | Services | Visible as a future category, but actual MEP route drawing is not yet implemented. |
 
-To edit an element later, select its Archyar controller, use the selection popup or expand **Archyar → Selected Archyar Element** and change its properties. For an existing wall use **Set Exact Length** or the native endpoint/base handles. Coincident wall endpoints on the same elevation follow these edits; changes which violate a hosted opening's clearance are rejected. For existing openings saved by v0.1, press **Load Selected Values** before editing. The Build panel has a separate construction grid with a configurable step (10 cm default) and independent **Grid Snap**, **Wall Snap** and **Angle Snap** controls (15° default), plus an **Active Level (Z)** field for storeys. All dimensions are in metres, and **Scene → Units → Unit Scale must be 1.0**.
+To edit an element later, select its Archyar controller, use the selection popup or expand **Archyar → Selected Archyar Element** and change its properties. For an existing wall use **Set Exact Length** or the native endpoint/base handles. Coincident wall endpoints on the same elevation follow these edits; changes which violate a hosted opening's clearance are rejected. For existing openings saved by v0.1, press **Load Selected Values** before editing. The Build panel has a separate construction grid with a configurable step (10 cm default) and independent **Grid Snap**, **Wall Snap** and **Angle Snap** controls (15° default). All dimensions are in metres, and **Scene → Units → Unit Scale must be 1.0**.
+
+## Building floors (v0.6)
+
+- Under **Archyar → Building Floors**, select **Initialize Building Floors** in older projects or when beginning a new scene. Existing Archyar wall elevations are detected without changing their geometry.
+- Press **+** to add the next floor at *active floor elevation + storey height*, select its row to make it the working floor, and edit its **Name, Floor Elevation and Storey Height** numerically.
+- Each top-level architectural object has a stable `archyar_floor_id`. A door/window inherits its host wall's floor. Changing a floor elevation moves its semantic elements vertically. Walls initially at full storey height follow height changes.
+- All floors remain visible in the 3D view by default, but only objects from the active floor are selectable. Per-floor eye toggles and **Show Active Floor Only** provide isolation. The independent 2D Plan window draws the active floor.
+- **-** removes only an empty floor; existing geometry will never be silently deleted. A new scene gets a ground floor automatically when the first Archyar item is created.
+- Creation controls now display compact **Grid / Snap / Angles** toggles and collapsible dimension, precision and stair settings.
 
 Door/window, furniture, and structure modes remain active for repeated placement until Esc, with in-viewport preview. The active tool is displayed in the Archyar sidebar. Doors/windows cannot detach from the host wall by moving a mesh; resize/position edits validate bounds and adjacent openings. Changes to width, height, sill and offset use **Apply Opening Changes**, while **Open Amount** animates the generated leaf without rebuilding the wall. Blender's asset picker still uses icon/text lists; richer rendered thumbnail cards are future work.
 

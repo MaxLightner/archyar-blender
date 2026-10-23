@@ -873,31 +873,46 @@ class VIEW3D_PT_archyar(bpy.types.Panel):
             row.operator("archyar.restore_view", text="Close 2D Plan", icon='PANEL_CLOSE')
         else:
             row.operator("archyar.plan_view", text="Open 2D Plan Window", icon='VIEW_ORTHO')
-        layout.prop(scene, "archyar_show_wall_handles", text="Wall Handles on Selection")
-        layout.prop(scene, "archyar_auto_popup", text="Popup When Selecting an Element")
+        options = layout.row(align=True)
+        options.prop(scene, "archyar_show_wall_handles", text="Handles", toggle=True)
+        options.prop(scene, "archyar_auto_popup", text="Inspector Popup", toggle=True)
         layout.prop(scene, "archyar_section", expand=True)
         if scene.archyar_section == 'BUILD':
-            layout.prop(scene, "archyar_level_elevation")
-            grid_box = layout.box()
-            grid_box.label(text="Construction Grid")
-            grid_box.prop(scene, "archyar_show_grid", text="Show Grid")
-            grid_box.prop(scene, "archyar_snap_grid", text="Snap to Grid")
-            grid_box.prop(scene, "archyar_snap_points", text="Snap to Wall Endpoints")
-            grid_box.prop(scene, "archyar_snap_angle", text="Snap Wall Angles")
-            if scene.archyar_snap_angle:
-                grid_box.prop(scene, "archyar_angle_step", text="Angle Increment")
-            grid_box.prop(scene, "archyar_grid_step", text="Grid Interval")
+            from . import floors
+            current_floor = floors.active_floor(scene)
+            if current_floor is None:
+                layout.operator("archyar.initialize_floors", text="Create Ground Floor", icon='ADD')
+                layout.label(text="Initialize a floor before drawing")
+                return
+            layout.label(text="Editing: " + current_floor.name, icon='OUTLINER_COLLECTION')
+            grid_bar = layout.row(align=True)
+            grid_bar.prop(scene, "archyar_show_grid", text="Grid", toggle=True)
+            grid_bar.prop(scene, "archyar_snap_grid", text="Snap", toggle=True)
+            grid_bar.prop(scene, "archyar_snap_angle", text="Angles", toggle=True)
             layout.prop(scene, "archyar_wall_preset", text="Wall Type")
-            layout.prop(scene, "archyar_thickness")
-            layout.prop(scene, "archyar_height")
-            layout.operator("archyar.draw_wall", text="Draw Wall (click points)", icon='MESH_CUBE')
-            layout.label(text="Walls snap to the active level grid")
-            stairs_box = layout.box()
-            stairs_box.label(text="Parametric Stairs")
-            for field in ('archyar_stair_run', 'archyar_stair_width', 'archyar_stair_rise',
-                          'archyar_stair_count', 'archyar_stair_filled'):
-                stairs_box.prop(scene, field)
-            stairs_tool = stairs_box.operator("archyar.place_structure", text="Preview & Place Stairs", icon='MOD_ARRAY')
+            layout.operator("archyar.draw_wall", text="Draw Walls", icon='MESH_CUBE')
+            layout.prop(scene, "archyar_wall_options", text="Wall Dimensions", toggle=True,
+                        icon='TRIA_DOWN' if scene.archyar_wall_options else 'TRIA_RIGHT')
+            if scene.archyar_wall_options:
+                props = layout.box()
+                props.prop(scene, "archyar_thickness")
+                props.prop(scene, "archyar_height")
+            layout.prop(scene, "archyar_grid_options", text="Grid & Precision", toggle=True,
+                        icon='TRIA_DOWN' if scene.archyar_grid_options else 'TRIA_RIGHT')
+            if scene.archyar_grid_options:
+                grid_box = layout.box()
+                grid_box.prop(scene, "archyar_snap_points", text="Wall Endpoints")
+                if scene.archyar_snap_angle:
+                    grid_box.prop(scene, "archyar_angle_step", text="Angle Increment")
+                grid_box.prop(scene, "archyar_grid_step", text="Grid Interval")
+            layout.prop(scene, "archyar_stair_options", text="Stairs", toggle=True,
+                        icon='TRIA_DOWN' if scene.archyar_stair_options else 'TRIA_RIGHT')
+            stairs_box = layout.box() if scene.archyar_stair_options else layout
+            if scene.archyar_stair_options:
+                for field in ('archyar_stair_run', 'archyar_stair_width', 'archyar_stair_rise',
+                              'archyar_stair_count', 'archyar_stair_filled'):
+                    stairs_box.prop(scene, field)
+            stairs_tool = stairs_box.operator("archyar.place_structure", text="Place Stairs", icon='MOD_ARRAY')
             stairs_tool.kind = 'stairs'
             box_ui = layout.box()
             box_ui.label(text="Other architectural elements")
@@ -1012,7 +1027,10 @@ def register():
     bpy.types.Scene.archyar_active_tool = StringProperty(name="Active Archyar Tool", default="")
     bpy.types.Scene.archyar_show_wall_handles = BoolProperty(name="Wall Handles", default=True)
     bpy.types.Scene.archyar_auto_popup = BoolProperty(name="Auto Element Popup", default=True)
-    bpy.types.Scene.archyar_level_elevation = FloatProperty(name="Active Level (Z)", default=0, min=-100, max=100, unit='LENGTH')
+    bpy.types.Scene.archyar_wall_options = BoolProperty(name="Show Wall Dimensions", default=False)
+    bpy.types.Scene.archyar_grid_options = BoolProperty(name="Show Precision Options", default=False)
+    bpy.types.Scene.archyar_stair_options = BoolProperty(name="Show Stairs Options", default=False)
+    bpy.types.Scene.archyar_level_elevation = FloatProperty(name="Active Level (Z)", default=0, min=-100, max=500, unit='LENGTH')
     bpy.types.Scene.archyar_show_grid = BoolProperty(name="Show Grid", default=True)
     bpy.types.Scene.archyar_snap_grid = BoolProperty(name="Snap to Grid", default=True)
     bpy.types.Scene.archyar_snap_points = BoolProperty(name="Snap to Wall Endpoints", default=True)
@@ -1043,6 +1061,7 @@ def unregister():
                   "archyar_open_width", "archyar_height", "archyar_thickness", "archyar_active_tool",
                   "archyar_show_wall_handles",
                   "archyar_auto_popup",
+                  "archyar_wall_options", "archyar_grid_options", "archyar_stair_options",
                   "archyar_snap_angle", "archyar_angle_step",
                   "archyar_level_elevation", "archyar_show_grid", "archyar_snap_grid",
                   "archyar_snap_points", "archyar_grid_step",

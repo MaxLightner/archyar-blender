@@ -81,6 +81,9 @@ def empty(name, location=(0, 0, 0), parent=None):
     obj.empty_display_size = .16
     obj.parent = parent
     obj.location = location
+    if parent is None and name.startswith("Archyar |"):
+        from . import floors
+        floors.tag_root(obj)
     return obj
 
 
