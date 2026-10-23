@@ -1,4 +1,4 @@
-"""Explicit, one-click source updater for the owner's private GitHub repository.
+"""Explicit, one-click source updater for Archyar's public GitHub repository.
 
 Only the archyar_blender package is touched. Updates run on user request, create
 a local backup, and take effect after Blender restart. Import/export is separate.
@@ -6,7 +6,6 @@ a local backup, and take effect after Blender restart. Import/export is separate
 
 import io
 import json
-import os
 from pathlib import Path
 import shutil
 import tempfile
@@ -15,7 +14,6 @@ import urllib.request
 import zipfile
 
 import bpy
-from bpy.props import StringProperty
 
 
 REPO = "MaxLightner/archyar-blender"
@@ -24,34 +22,9 @@ ALLOWED_SUFFIXES = {'.py', '.json'}
 MAX_DOWNLOAD = 20 * 1024 * 1024
 
 
-class ARCHYAR_AddonPreferences(bpy.types.AddonPreferences):
-    bl_idname = __package__
-    github_token: StringProperty(
-        name="GitHub Access Token",
-        description="Fine-grained token with read-only Contents access to this PRIVATE repository. "
-                    "Stored in Blender preferences; for higher security use ARCHYAR_GITHUB_TOKEN environment variable",
-        subtype='PASSWORD', default="")
-
-    def draw(self, context):
-        layout = self.layout
-        layout.label(text="Required for updates from the private repository")
-        layout.prop(self, "github_token")
-        layout.label(text="Use a fine-grained, read-only token. Blender preferences are not encrypted.", icon='INFO')
-
-
-def _token(context):
-    override = os.environ.get("ARCHYAR_GITHUB_TOKEN", "").strip()
-    if override:
-        return override
-    prefs = context.preferences.addons.get(__package__)
-    return prefs.preferences.github_token.strip() if prefs else ""
-
-
-def _download(url, token, limit=MAX_DOWNLOAD):
+def _download(url, limit=MAX_DOWNLOAD):
     headers = {"Accept": "application/vnd.github+json", "User-Agent": "Archyar-Blender-Updater",
                "X-GitHub-Api-Version": "2022-11-28"}
-    if token:
-        headers["Authorization"] = "Bearer " + token
     req = urllib.request.Request(url, headers=headers)
     with urllib.request.urlopen(req, timeout=20) as response:
         data = response.read(limit + 1)
@@ -61,12 +34,11 @@ def _download(url, token, limit=MAX_DOWNLOAD):
 
 
 def update_addon(context):
-    token = _token(context)
     try:
-        payload = json.loads(_download(SOURCE + "/commits/main", token, 1024*1024))
+        payload = json.loads(_download(SOURCE + "/commits/main", 1024*1024))
     except urllib.error.HTTPError as error:
         if error.code in (401, 403, 404):
-            raise ValueError("Cannot read the private repository. Configure a read-only GitHub token") from None
+            raise ValueError("Cannot access public GitHub source (HTTP %d); check network or rate limit" % error.code) from None
         raise ValueError("GitHub update check failed (HTTP %d)" % error.code) from None
     sha = str(payload.get("sha", ""))
     if len(sha) != 40 or any(c not in '0123456789abcdef' for c in sha):
@@ -76,7 +48,7 @@ def update_addon(context):
     if marker.exists() and marker.read_text(encoding="ascii").strip() == sha:
         return "Already up to date"
 
-    archive = _download(SOURCE + "/zipball/" + sha, token)
+    archive = _download(SOURCE + "/zipball/" + sha)
     files = {}
     with zipfile.ZipFile(io.BytesIO(archive)) as zipped:
         for entry in zipped.infolist():
@@ -127,7 +99,7 @@ def update_addon(context):
 class ARCHYAR_OT_update(bpy.types.Operator):
     bl_idname = "archyar.update_addon"
     bl_label = "Update Archyar from GitHub"
-    bl_description = "Fetch the latest main branch of the private source repo and install it; restart Blender"
+    bl_description = "Fetch latest public Archyar source and install it; restart Blender"
 
     def execute(self, context):
         try:
@@ -149,15 +121,12 @@ class VIEW3D_PT_archyar_update(bpy.types.Panel):
 
     def draw(self, context):
         layout = self.layout
-        prefs = context.preferences.addons.get(__package__)
-        if prefs:
-            layout.prop(prefs.preferences, "github_token", text="Read-only Token")
         layout.operator("archyar.update_addon", icon='FILE_REFRESH')
         layout.label(text="Restart Blender after an update")
-        layout.label(text="Token needed while GitHub repo is private")
+        layout.label(text="Public GitHub repository: no token needed", icon='INFO')
 
 
-CLASSES = (ARCHYAR_AddonPreferences, ARCHYAR_OT_update, VIEW3D_PT_archyar_update)
+CLASSES = (ARCHYAR_OT_update, VIEW3D_PT_archyar_update)
 
 
 def register():
