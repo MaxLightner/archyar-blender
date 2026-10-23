@@ -185,6 +185,14 @@ class ARCHYAR_OT_element_popup(bpy.types.Operator):
                 layout.prop(p, field)
         else:
             layout.label(text='Archyar element: ' + str(kind))
+            layout.label(text='Controller placement (generated geometry stays protected)')
+            layout.prop(root, 'location')
+            layout.prop(root, 'rotation_euler')
+            if kind == 'FURNITURE':
+                layout.label(text='Catalog: ' + str(root.get('archyar_catalog_id', 'Unknown')))
+                layout.label(text='Width: %.2f m' % root.get('archyar_width', 0))
+                layout.label(text='Height: %.2f m' % root.get('archyar_height', 0))
+                layout.label(text='Depth: %.2f m' % root.get('archyar_depth', 0))
 
 
 class ARCHYAR_OT_load_opening(bpy.types.Operator):
