@@ -1,4 +1,4 @@
-# Archyar modeling contract — v0.2.0
+# Archyar modeling contract — v0.3.0
 
 This contract applies to both `MaxLightner/archyar-blender` and `MaxLightner/archyar`.
 Any behavioral change to an opening, wall, stair or catalog asset must be reviewed in **both** repositories, even before model import/export is enabled.
@@ -16,7 +16,11 @@ Any behavioral change to an opening, wall, stair or catalog asset must be review
 | Underside | `stair-open` (default for newly created stairs): each tread is 5 cm thick and underside is open. `stair-filled`: every step extends to ground. |
 | Legacy stair | Missing/`plain` stair style in an older Android project remains **filled**. Existing stored projects must never change shape silently. |
 | Live preview | Cursor/reticle shows the actual footprint, wall-hosted opening width, or visible 3D ghost before confirmation; confirmation is a separate action. |
+| Wall handles | Move a wall's start/end or whole segment using on-canvas handles. Coincident connected endpoints at the same level move together. Validate wall length (≥10 cm), hosted opening clearances and existing locks **before** committing; one gesture is one Undo step. |
+| Wall numeric length | Post-drawing numeric length edit must allow a fixed start or end. The other connected joint follows; never require a numeric length before drawing. |
+| Floor grid | A metric reference plane independent of calibration and project coordinates, with a separately configurable snap behavior. Blender uses a configurable default 10 cm interval; Android's plan and AR overlay use 25 cm subdivisions and 1 m major lines. Floor/storey elevation selects the current editing plane. |
+| AR plane visualization | Only the centered circular floor marker and an unbounded, thin metric grid: no ARCore detected-plane polygon and no circular fading mask. Camera hit-test tracking may still rely on ARCore plane polygons internally. |
 
 Stair-filled state is represented in Android's existing `WorkspaceModel.Item.style` string, already saved by `ProjectSnapshotCodec` version 1. No snapshot schema migration is needed. Blender stores the equivalent as `archyar_stair_style`. The apps do not yet exchange objects; this documents their matching logic for future import/export.
 
-Current intentional differences: Android retains Persian RTL UI; Blender uses English UI because built-in Blender fonts are unsuitable for Persian. Preview rendering detail and furniture low-poly mesh construction are platform-specific. The 3D visual correctness of both still needs in-app device testing.
+Current intentional differences: Android retains Persian RTL UI; Blender uses English UI because built-in Blender fonts are unsuitable for Persian. Preview rendering detail and furniture low-poly mesh construction are platform-specific. Blender's wall joints are currently inferred by equal XY endpoints at the same Z elevation; Android persists stable node IDs and automatically splits at junctions. Both reject invalid connected edits. Image-based catalog browsing and direct AR wall dragging remain separate future interaction improvements. The 3D visual correctness of both still needs in-app device testing.

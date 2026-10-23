@@ -100,6 +100,9 @@ def mark_preview(root, enabled):
         item = nested.pop()
         nested.extend(list(item.children))
         item.hide_select = enabled
+        # In particular, a door/window ghost must remain visible in front of its
+        # uncut host wall until the user confirms its Boolean opening.
+        item.show_in_front = enabled
         if item.type == 'MESH':
             item.display_type = 'WIRE' if enabled else 'TEXTURED'
             item.hide_render = enabled
@@ -109,7 +112,7 @@ def length(a, b):
     return math.hypot(b[0] - a[0], b[1] - a[1])
 
 
-def create_wall(a, b, thickness=.15, height=3.0, preset="wall"):
+def create_wall(a, b, thickness=.15, height=3.0, preset="wall", elevation=0.0):
     if length(a, b) < .10:
         raise ValueError("Wall length must be at least 10 cm")
     obj = mesh_object("Archyar | Wall", box_vertices(1, 1, 1), _BOX_FACES,
@@ -122,6 +125,7 @@ def create_wall(a, b, thickness=.15, height=3.0, preset="wall"):
     wall.end = b
     wall.thickness = thickness
     wall.height = height
+    wall.elevation = elevation
     refresh_wall(obj)
     select(obj)
     return obj
@@ -139,7 +143,8 @@ def refresh_wall(obj):
     mesh.clear_geometry()
     mesh.from_pydata(box_vertices(span, wall.thickness, wall.height), [], _BOX_FACES)
     mesh.update()
-    obj.location = ((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, wall.height / 2)
+    obj.location = ((a[0] + b[0]) / 2, (a[1] + b[1]) / 2,
+                    wall.elevation + wall.height / 2)
     obj.rotation_euler = (0, 0, math.atan2(b[1] - a[1], b[0] - a[0]))
     for child in obj.children:
         if child.get("archyar_kind") != "OPENING":

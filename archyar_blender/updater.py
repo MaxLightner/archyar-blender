@@ -6,6 +6,7 @@ a local backup, and take effect after Blender restart. Import/export is separate
 
 import io
 import json
+import os
 from pathlib import Path
 import shutil
 import tempfile
