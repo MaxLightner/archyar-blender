@@ -16,7 +16,7 @@ For a local build, run `python scripts/build_zip.py` and install `dist/archyar-b
 | Group | Current behavior |
 | --- | --- |
 | Build | Choose 10, 15, or 20 cm wall preset, override thickness and height, then click start/end points on XY ground. A 3D wall-outline preview follows the cursor. Continue chaining walls; Enter finishes. Wall lengths are always drawn above walls. |
-| Openings | Choose fixed/sliding/hinged/arched window or hinged/sliding door; select a wall and see a wireframe model following the intended opening before clicking. A non-destructive Boolean cuts the wall. Select the placed opening to edit width, height, sill, distance from wall start, type, arch rise and opening amount. |
+| Openings | Choose fixed/sliding/hinged/arched window or hinged/sliding door; select a wall and see a wireframe model following the intended opening before clicking. Default doors are 0.90 × 2.10 m (as on Android), unless you override the dimensions. A non-destructive Boolean cuts the wall. Select the placed opening to edit width, height, sill, distance from wall start, type, arch rise and opening amount. |
 | Furniture | Nine category groups contain the **same 22 catalog items, IDs, and exact dimensions** as the Android app. Every furniture asset follows the cursor as a 3D wire preview before placement. Wall art attaches to a selected Archyar wall. |
 | Other elements | Floor, ceiling, column and railing primitives have wire previews. Straight stairs have live-editable run, width, total rise and step count, with a **Filled Underside** checkbox (unchecked initially). |
 | Services | Visible as a future category, but actual MEP route drawing is not yet implemented. |

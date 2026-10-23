@@ -291,6 +291,15 @@ class ARCHYAR_OT_place_opening(_ViewportPlacement, bpy.types.Operator):
     bl_options = {'REGISTER', 'UNDO'}
     style: StringProperty(default="fixed")
 
+    def _dimensions(self, context):
+        width = context.scene.archyar_open_width
+        height = context.scene.archyar_open_height
+        # Mobile's standard door is 0.90 × 2.10 m; only substitute when the
+        # untouched 1.20 × 1.40 m default for windows is still selected.
+        if self.style in ('door', 'sliding-door') and abs(width-1.2)<1e-6 and abs(height-1.4)<1e-6:
+            return .9, 2.1
+        return width, height
+
     def invoke(self, context, event):
         self._wall = context.active_object if context.active_object and context.active_object.get("archyar_kind") == "WALL" else None
         try:
@@ -318,15 +327,19 @@ class ARCHYAR_OT_place_opening(_ViewportPlacement, bpy.types.Operator):
             if event.type == 'LEFTMOUSE':
                 self.report({'WARNING'}, "Select a wall or click within 65 cm of one")
             return {'RUNNING_MODAL'}
-        width = context.scene.archyar_open_width
-        height = context.scene.archyar_open_height
+        width, height = self._dimensions(context)
         sill = 0 if self.style in ('door', 'sliding-door') else context.scene.archyar_sill
         if self._ghost is not None and self._ghost.parent != wall:
             geometry.remove_tree(self._ghost)
             self._ghost = None
         if self._ghost is None:
             self._ghost = geometry.preview_opening(wall, self.style, width, height, sill)
-        self._ghost['archyar_t'] = wall_fraction(wall, point)
+        fraction = wall_fraction(wall, point)
+        span = geometry.length(wall.archyar_wall.start, wall.archyar_wall.end)
+        if span >= width + .20:
+            margin = (width/2+.10)/span
+            fraction = max(margin, min(1-margin, fraction))
+        self._ghost['archyar_t'] = fraction
         geometry.reposition_opening(self._ghost, wall)
         context.area.tag_redraw()
         if event.type != 'LEFTMOUSE' or event.value != 'PRESS':
