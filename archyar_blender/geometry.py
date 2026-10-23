@@ -169,6 +169,14 @@ def refresh_wall(obj):
                     wall.elevation + wall.height / 2)
     obj.rotation_euler = (0, 0, math.atan2(b[1] - a[1], b[0] - a[0]))
     for child in obj.children:
+        if child.get("archyar_kind") == "WALL_LIGHT":
+            from . import mep
+            try:
+                mep.rebuild_wall_light(child)
+                child["archyar_valid"]=True
+            except ValueError:
+                child["archyar_valid"]=False
+            continue
         if child.get("archyar_kind") != "OPENING":
             continue
         reposition_opening(child, obj)
