@@ -60,11 +60,23 @@ class SemanticControllers(unittest.TestCase):
         self.assertIn('self.gizmos.new("GIZMO_GT_move_3d")', source)
         self.assertIn('wall_connection_changes(wall, new_a, new_b)', source)
 
-    def test_plan_view_has_explicit_restore(self):
+    def test_plan_opens_separate_live_window_without_rotating_main_view(self):
         source = (ROOT / "view_modes.py").read_text(encoding="utf-8")
-        self.assertIn("view_axis(type='TOP'", source)
+        self.assertIn("bpy.ops.screen.area_dupli()", source)
+        self.assertIn("view.view_rotation = Quaternion((1, 0, 0, 0))", source)
         self.assertIn("view.view_perspective = 'ORTHO'", source)
-        self.assertIn("_SAVED_VIEW.pop(area.as_pointer(), None)", source)
+        self.assertNotIn('view3d.view_axis', source)
+        self.assertIn('bpy.ops.wm.window_close()', source)
+
+    def test_openings_remain_host_bound_and_can_keyframe(self):
+        geometry = (ROOT / 'geometry.py').read_text(encoding='utf-8')
+        gizmos = (ROOT / 'gizmos.py').read_text(encoding='utf-8')
+        controls = (ROOT / 'operators.py').read_text(encoding='utf-8')
+        self.assertIn('root.lock_location = (True, True, True)', geometry)
+        self.assertIn('def move_opening_handle(index, value):', gizmos)
+        self.assertIn('geometry.apply_opening(root, style, width, height, sill, t,', gizmos)
+        self.assertIn('def _animate_archyar_openings(scene, depsgraph=None):', controls)
+        self.assertIn('root.keyframe_insert(data_path=', controls)
 
 
 if __name__ == "__main__":

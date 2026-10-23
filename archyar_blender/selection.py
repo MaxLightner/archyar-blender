@@ -16,6 +16,38 @@ _redirecting = False
 _last_selected_controller = None
 
 
+def _queue_popup(controller):
+    scene = bpy.context.scene
+    if scene is None or not getattr(scene, 'archyar_auto_popup', False):
+        return
+    if getattr(scene, 'archyar_active_tool', ''):
+        return  # Never steal mouse focus from a live placement operator.
+    expected = controller.as_pointer()
+
+    def show():
+        # Timers and depsgraph callbacks typically have no VIEW_3D context.
+        # Find a real visible viewport instead of silently dropping the popup.
+        for window in bpy.context.window_manager.windows:
+            active = window.view_layer.objects.active
+            if active is None or active.as_pointer() != expected:
+                continue
+            for area in window.screen.areas:
+                if area.type != 'VIEW_3D':
+                    continue
+                region = next((r for r in area.regions if r.type == 'WINDOW'), None)
+                if region is None:
+                    continue
+                try:
+                    with bpy.context.temp_override(window=window, area=area, region=region):
+                        bpy.ops.archyar.element_popup('INVOKE_DEFAULT')
+                except RuntimeError:
+                    pass
+                return None
+        return None
+
+    bpy.app.timers.register(show, first_interval=.06)
+
+
 def semantic_root(obj):
     """Nearest ancestor with Archyar metadata, including the object itself."""
     while obj is not None:
@@ -45,6 +77,7 @@ def _sync_selection():
             if controller.get("archyar_kind") == "OPENING":
                 from .operators import load_opening_settings
                 load_opening_settings(controller)
+            _queue_popup(controller)
         return
     _redirecting = True
     try:
@@ -56,6 +89,7 @@ def _sync_selection():
         if controller.get("archyar_kind") == "OPENING":
             from .operators import load_opening_settings
             load_opening_settings(controller)
+        _queue_popup(controller)
     finally:
         _redirecting = False
 

@@ -4,6 +4,7 @@ import math
 
 import bpy
 import gpu
+from bpy.app.handlers import persistent
 from bpy.props import (BoolProperty, EnumProperty, FloatProperty,
                        FloatVectorProperty, IntProperty, PointerProperty, StringProperty)
 from bpy_extras import view3d_utils
@@ -52,6 +53,12 @@ class ArchyarStairSettings(bpy.types.PropertyGroup):
     filled: BoolProperty(name="Filled Underside", default=False, update=_on_stair_change)
 
 
+def _on_open_fraction_change(self, context):
+    root = self.id_data
+    if root is not None and root.get('archyar_kind') == 'OPENING':
+        geometry.pose_opening(root, self.open_fraction)
+
+
 class ArchyarOpeningSettings(bpy.types.PropertyGroup):
     style: EnumProperty(name="Type", items=[(key, name, name) for key, name in OPENINGS.items()])
     width: FloatProperty(name="Width", default=1.2, min=.3, max=6, unit='LENGTH')
@@ -60,7 +67,8 @@ class ArchyarOpeningSettings(bpy.types.PropertyGroup):
     offset: FloatProperty(name="Along Wall", default=0, min=0, max=100, unit='LENGTH')
     arch_rise: FloatProperty(name="Arch Rise", default=.25, min=0, max=4, unit='LENGTH')
     mirrored: BoolProperty(name="Mirrored", default=False)
-    open_fraction: FloatProperty(name="Open Amount", default=0, min=0, max=1, subtype='FACTOR')
+    open_fraction: FloatProperty(name="Open Amount", default=0, min=0, max=1,
+                                 subtype='FACTOR', update=_on_open_fraction_change)
 
 
 def load_opening_settings(root):
@@ -102,6 +110,81 @@ class ARCHYAR_OT_edit_opening(bpy.types.Operator):
         load_opening_settings(root)
         self.report({'INFO'}, "Opening updated")
         return {'FINISHED'}
+
+
+class ARCHYAR_OT_opening_keyframe(bpy.types.Operator):
+    bl_idname = 'archyar.opening_keyframe'
+    bl_label = 'Keyframe Open Amount'
+    bl_description = 'Animate the door/window open slider on the current Blender frame'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        root = context.active_object
+        if root is None or root.get('archyar_kind') != 'OPENING':
+            return {'CANCELLED'}
+        geometry.pose_opening(root, root.archyar_opening.open_fraction)
+        root.keyframe_insert(data_path='["archyar_open_fraction"]',
+                             frame=context.scene.frame_current)
+        return {'FINISHED'}
+
+
+@persistent
+def _animate_archyar_openings(scene, depsgraph=None):
+    for root in scene.objects:
+        if root.get('archyar_kind') != 'OPENING':
+            continue
+        # Reading the evaluated property preserves interpolation from F-curves.
+        sampled = root.evaluated_get(depsgraph) if depsgraph else root
+        value = float(sampled.get('archyar_open_fraction', 0))
+        geometry.pose_opening(root, value, record=False)
+
+
+class ARCHYAR_OT_element_popup(bpy.types.Operator):
+    bl_idname = 'archyar.element_popup'
+    bl_label = 'Archyar Properties'
+    bl_description = 'Contextual properties for the selected architectural element'
+
+    @classmethod
+    def poll(cls, context):
+        return bool(context.active_object and context.active_object.get('archyar_kind'))
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_popup(self, width=345)
+
+    def execute(self, context):
+        return {'FINISHED'}
+
+    def draw(self, context):
+        root = context.active_object
+        layout = self.layout
+        kind = root.get('archyar_kind')
+        if kind == 'WALL':
+            p = root.archyar_wall
+            layout.label(text='Wall | Parameter Editing')
+            layout.prop(p, 'start')
+            layout.prop(p, 'end')
+            layout.label(text='Length: %.3f m' % geometry.length(p.start, p.end))
+            for field in ('thickness', 'height', 'elevation'):
+                layout.prop(p, field)
+            layout.operator('archyar.set_wall_length', text='Exact Length')
+        elif kind == 'OPENING':
+            p = root.archyar_opening
+            layout.label(text='Door / Window | Attached to Wall')
+            for field in ('style', 'width', 'height', 'sill', 'offset'):
+                layout.prop(p, field)
+            if p.style == 'arched':
+                layout.prop(p, 'arch_rise')
+            layout.prop(p, 'mirrored')
+            layout.operator('archyar.edit_opening', text='Apply Dimensions / Position')
+            layout.separator()
+            layout.prop(p, 'open_fraction', slider=True)
+            layout.operator('archyar.opening_keyframe', text='Insert Open Keyframe', icon='KEY_HLT')
+        elif kind == 'STAIRS':
+            p = root.archyar_stair
+            for field in ('run', 'width', 'rise', 'count', 'filled'):
+                layout.prop(p, field)
+        else:
+            layout.label(text='Archyar element: ' + str(kind))
 
 
 class ARCHYAR_OT_load_opening(bpy.types.Operator):
@@ -163,6 +246,29 @@ def snap_point(point, scene, threshold=.12, excluded=None):
         step = scene.archyar_grid_step
         best = Vector((round(point.x / step) * step, round(point.y / step) * step))
     return tuple(best)
+
+
+def snap_wall_angle(start, end, scene):
+    """Polar tracking: snap wall heading while preserving its plan length.
+
+    Architectural endpoint snapping runs first; an exact endpoint always wins.
+    For arbitrary angles, polar tracking takes precedence over Cartesian grid.
+    """
+    if not scene.archyar_snap_angle:
+        return tuple(end)
+    delta = Vector(end) - Vector(start)
+    if delta.length < .0001:
+        return tuple(end)
+    step = math.radians(scene.archyar_angle_step)
+    angle = round(math.atan2(delta.y, delta.x) / step) * step
+    # Grid increments are used on the radial distance as well, so the
+    # construction tool remains metric with both toggles enabled.
+    radius = delta.length
+    if scene.archyar_snap_grid:
+        grid = scene.archyar_grid_step
+        radius = max(grid, round(radius / grid) * grid)
+    return (start[0] + radius * math.cos(angle),
+            start[1] + radius * math.sin(angle))
 
 
 def nearest_wall(point, max_distance=.65, elevation=None):
@@ -282,7 +388,7 @@ class ARCHYAR_OT_edit_wall_handles(bpy.types.Operator):
     def _handle_points(self, context):
         wall = self._wall.archyar_wall
         a, b = Vector(wall.start), Vector(wall.end)
-        z = wall.elevation + min(wall.height, 1.2)
+        z = wall.elevation + .015
         region = _window_region(context)
         rv3d = context.space_data.region_3d
         return [view3d_utils.location_3d_to_region_2d(region, rv3d,
@@ -511,6 +617,12 @@ class ARCHYAR_OT_draw_wall(_ViewportPlacement, bpy.types.Operator):
         if point is None:
             return {'PASS_THROUGH'}
         value = snap_point(point, context.scene)
+        if self._start is not None:
+            # Explicit wall endpoint snapping has priority over angle tracking.
+            nearest = nearest_wall(Vector((*value, 0)), .001,
+                                   context.scene.archyar_level_elevation)
+            if nearest is None:
+                value = snap_wall_angle(self._start, value, context.scene)
         if event.ctrl and not context.scene.archyar_snap_grid:
             value = tuple(round(v * 10) / 10 for v in value)
         self._current = value
@@ -750,10 +862,11 @@ class VIEW3D_PT_archyar(bpy.types.Panel):
         from . import view_modes
         row = layout.row(align=True)
         if view_modes.is_plan_view(context.area):
-            row.operator("archyar.restore_view", text="Return to 3D", icon='VIEW_PERSPECTIVE')
+            row.operator("archyar.restore_view", text="Close 2D Plan", icon='PANEL_CLOSE')
         else:
-            row.operator("archyar.plan_view", text="2D Floor Plan", icon='VIEW_ORTHO')
+            row.operator("archyar.plan_view", text="Open 2D Plan Window", icon='VIEW_ORTHO')
         layout.prop(scene, "archyar_show_wall_handles", text="Wall Handles on Selection")
+        layout.prop(scene, "archyar_auto_popup", text="Popup When Selecting an Element")
         layout.prop(scene, "archyar_section", expand=True)
         if scene.archyar_section == 'BUILD':
             layout.prop(scene, "archyar_level_elevation")
@@ -762,6 +875,9 @@ class VIEW3D_PT_archyar(bpy.types.Panel):
             grid_box.prop(scene, "archyar_show_grid", text="Show Grid")
             grid_box.prop(scene, "archyar_snap_grid", text="Snap to Grid")
             grid_box.prop(scene, "archyar_snap_points", text="Snap to Wall Endpoints")
+            grid_box.prop(scene, "archyar_snap_angle", text="Snap Wall Angles")
+            if scene.archyar_snap_angle:
+                grid_box.prop(scene, "archyar_angle_step", text="Angle Increment")
             grid_box.prop(scene, "archyar_grid_step", text="Grid Interval")
             layout.prop(scene, "archyar_wall_preset", text="Wall Type")
             layout.prop(scene, "archyar_thickness")
@@ -854,7 +970,8 @@ class VIEW3D_PT_archyar_edit(bpy.types.Panel):
                 layout.prop(props, 'arch_rise')
             if props.style in ('door', 'sliding-door', 'hinged', 'sliding'):
                 layout.prop(props, 'mirrored')
-                layout.prop(props, 'open_fraction')
+                layout.prop(props, 'open_fraction', slider=True)
+                layout.operator('archyar.opening_keyframe', text='Keyframe Open Amount', icon='KEY_HLT')
             layout.operator('archyar.edit_opening', icon='CHECKMARK')
             layout.operator('archyar.rebuild_element', text="Repair Door / Window", icon='FILE_REFRESH')
         else:
@@ -863,6 +980,7 @@ class VIEW3D_PT_archyar_edit(bpy.types.Panel):
 
 CLASSES = (ArchyarWallSettings, ArchyarStairSettings, ArchyarOpeningSettings,
            ARCHYAR_OT_edit_opening, ARCHYAR_OT_load_opening,
+           ARCHYAR_OT_element_popup, ARCHYAR_OT_opening_keyframe,
            ARCHYAR_OT_set_wall_length, ARCHYAR_OT_edit_wall_handles, ARCHYAR_OT_rebuild_element,
            ARCHYAR_OT_draw_wall,
            ARCHYAR_OT_place_opening, ARCHYAR_OT_place_furniture,
@@ -885,10 +1003,16 @@ def register():
     bpy.types.Scene.archyar_thickness = FloatProperty(name="Wall Thickness", default=.15, min=.04, max=1, unit='LENGTH')
     bpy.types.Scene.archyar_active_tool = StringProperty(name="Active Archyar Tool", default="")
     bpy.types.Scene.archyar_show_wall_handles = BoolProperty(name="Wall Handles", default=True)
+    bpy.types.Scene.archyar_auto_popup = BoolProperty(name="Auto Element Popup", default=True)
     bpy.types.Scene.archyar_level_elevation = FloatProperty(name="Active Level (Z)", default=0, min=-100, max=100, unit='LENGTH')
     bpy.types.Scene.archyar_show_grid = BoolProperty(name="Show Grid", default=True)
     bpy.types.Scene.archyar_snap_grid = BoolProperty(name="Snap to Grid", default=True)
     bpy.types.Scene.archyar_snap_points = BoolProperty(name="Snap to Wall Endpoints", default=True)
+    bpy.types.Scene.archyar_snap_angle = BoolProperty(name="Snap Wall Angles", default=True)
+    bpy.types.Scene.archyar_angle_step = FloatProperty(name="Angle Increment (degrees)", default=15,
+        min=5, max=90, step=500, precision=0)
+    if _animate_archyar_openings not in bpy.app.handlers.frame_change_post:
+        bpy.app.handlers.frame_change_post.append(_animate_archyar_openings)
     bpy.types.Scene.archyar_grid_step = FloatProperty(name="Grid Interval", default=.10, min=.05, max=1.0, unit='LENGTH')
     bpy.types.Scene.archyar_height = FloatProperty(name="Wall Height", default=3.0, min=.3, max=12, unit='LENGTH')
     bpy.types.Scene.archyar_open_width = FloatProperty(name="Width", default=1.2, min=.3, max=6, unit='LENGTH')
@@ -904,10 +1028,14 @@ def register():
 
 
 def unregister():
+    if _animate_archyar_openings in bpy.app.handlers.frame_change_post:
+        bpy.app.handlers.frame_change_post.remove(_animate_archyar_openings)
     for name in ("archyar_stair_filled", "archyar_stair_count", "archyar_stair_rise",
                  "archyar_stair_width", "archyar_stair_run", "archyar_furn_category", "archyar_sill", "archyar_open_height",
                   "archyar_open_width", "archyar_height", "archyar_thickness", "archyar_active_tool",
                   "archyar_show_wall_handles",
+                  "archyar_auto_popup",
+                  "archyar_snap_angle", "archyar_angle_step",
                   "archyar_level_elevation", "archyar_show_grid", "archyar_snap_grid",
                   "archyar_snap_points", "archyar_grid_step",
                  "archyar_wall_preset", "archyar_section"):

@@ -1,71 +1,87 @@
-"""A dedicated XY floor-plan representation using Blender's top orthographic view.
-
-This toggles only the current 3D editor, so another editor can remain in 3D
-for simultaneous work. The original perspective is restored on exit.
-"""
+"""Separate top-orthographic floor-plan window; the 3D viewport stays intact."""
 
 import bpy
+from mathutils import Quaternion
 
 
-_SAVED_VIEW = {}
+_PLAN_AREAS = set()
 
 
 def is_plan_view(area):
-    return area is not None and area.as_pointer() in _SAVED_VIEW
+    return area is not None and area.as_pointer() in _PLAN_AREAS
+
+
+def _find_plan_window():
+    for window in bpy.context.window_manager.windows:
+        for area in window.screen.areas:
+            if area.type == 'VIEW_3D' and is_plan_view(area):
+                return window, area
+    return None, None
+
+
+def _configure(window, area, level):
+    space = area.spaces.active
+    view = space.region_3d
+    view.view_rotation = Quaternion((1, 0, 0, 0))
+    view.view_perspective = 'ORTHO'
+    view.view_location.z = level
+    space.show_region_ui = False
+    _PLAN_AREAS.add(area.as_pointer())
+    area.tag_redraw()
 
 
 class ARCHYAR_OT_plan_view(bpy.types.Operator):
     bl_idname = "archyar.plan_view"
-    bl_label = "2D Floor Plan"
-    bl_description = "Switch this 3D viewport to a metric top orthographic floor plan"
+    bl_label = "Open 2D Plan Window"
+    bl_description = "Open a live plan in a separate window; preserve the existing 3D view"
     bl_options = {'REGISTER'}
 
     def execute(self, context):
-        area = context.area
-        if area is None or area.type != 'VIEW_3D':
-            return {'CANCELLED'}
-        if is_plan_view(area):
+        window, area = _find_plan_window()
+        if window is not None:
+            _configure(window, area, context.scene.archyar_level_elevation)
             return {'FINISHED'}
-        space = context.space_data
-        region = next((item for item in area.regions if item.type == 'WINDOW'), None)
-        if region is None:
-            self.report({'ERROR'}, "3D viewport region unavailable")
+        source = context.area
+        if source is None or source.type != 'VIEW_3D':
             return {'CANCELLED'}
-        view = space.region_3d
-        _SAVED_VIEW[area.as_pointer()] = (
-            view.view_rotation.copy(), view.view_location.copy(),
-            view.view_distance, view.view_perspective)
+        existing = {w.as_pointer() for w in context.window_manager.windows}
         try:
-            with context.temp_override(area=area, region=region):
-                bpy.ops.view3d.view_axis(type='TOP', align_active=False, relative=False)
+            result = bpy.ops.screen.area_dupli()
+            if 'FINISHED' not in result and 'RUNNING_MODAL' not in result:
+                return {'CANCELLED'}
         except RuntimeError as error:
-            _SAVED_VIEW.pop(area.as_pointer(), None)
             self.report({'ERROR'}, str(error))
             return {'CANCELLED'}
-        view.view_perspective = 'ORTHO'
-        view.view_location.z = context.scene.archyar_level_elevation
-        area.tag_redraw()
+        # The window may be created on Blender's next event-loop tick. A short
+        # timer resolves it without changing the operator's original viewport.
+        level = context.scene.archyar_level_elevation
+        attempts = [0]
+        def configure_new_window():
+            for new_window in bpy.context.window_manager.windows:
+                if new_window.as_pointer() not in existing:
+                    plan = next((a for a in new_window.screen.areas if a.type == 'VIEW_3D'), None)
+                    if plan is not None:
+                        _configure(new_window, plan, level)
+                        return None
+            attempts[0] += 1
+            return .1 if attempts[0] < 15 else None
+        bpy.app.timers.register(configure_new_window, first_interval=.05)
         return {'FINISHED'}
 
 
 class ARCHYAR_OT_restore_view(bpy.types.Operator):
     bl_idname = "archyar.restore_view"
-    bl_label = "Return to 3D"
-    bl_description = "Return this viewport to its view before entering the Archyar plan"
+    bl_label = "Close 2D Plan Window"
+    bl_description = "Close only the independent plan window"
     bl_options = {'REGISTER'}
 
     def execute(self, context):
-        area = context.area
-        if area is None or area.type != 'VIEW_3D':
+        window, area = _find_plan_window()
+        if window is None:
             return {'CANCELLED'}
-        saved = _SAVED_VIEW.pop(area.as_pointer(), None)
-        if saved is None:
-            self.report({'INFO'}, "This viewport is already in 3D mode")
-            return {'FINISHED'}
-        view = context.space_data.region_3d
-        view.view_rotation, view.view_location = saved[0], saved[1]
-        view.view_distance, view.view_perspective = saved[2], saved[3]
-        area.tag_redraw()
+        _PLAN_AREAS.discard(area.as_pointer())
+        with context.temp_override(window=window, area=area):
+            bpy.ops.wm.window_close()
         return {'FINISHED'}
 
 
@@ -78,6 +94,6 @@ def register():
 
 
 def unregister():
-    _SAVED_VIEW.clear()
+    _PLAN_AREAS.clear()
     for cls in reversed(CLASSES):
         bpy.utils.unregister_class(cls)

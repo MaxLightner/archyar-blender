@@ -125,6 +125,10 @@ def create_wall(a, b, thickness=.15, height=3.0, preset="wall", elevation=0.0):
     obj = empty("Archyar | Wall")
     obj.empty_display_type = 'CUBE'
     obj.empty_display_size = .18
+    # The semantic parameters, not Blender G/S/R, control architectural walls.
+    obj.lock_location = (True, True, True)
+    obj.lock_rotation = (True, True, True)
+    obj.lock_scale = (True, True, True)
     obj["archyar_kind"] = "WALL"
     obj["archyar_preset"] = preset
     obj["archyar_id"] = str(uuid.uuid4())
@@ -201,6 +205,9 @@ def migrate_legacy_walls():
         collection.objects.link(root)
         root.empty_display_type = 'CUBE'
         root.empty_display_size = .18
+        root.lock_location = (True, True, True)
+        root.lock_rotation = (True, True, True)
+        root.lock_scale = (True, True, True)
         root["archyar_kind"] = "WALL"
         root["archyar_preset"] = visual.get("archyar_preset", "wall")
         root["archyar_id"] = visual.get("archyar_id", str(uuid.uuid4()))
@@ -228,6 +235,11 @@ def migrate_legacy_walls():
         if bpy.context.view_layer and bpy.context.view_layer.objects.active == visual:
             select(root)
         migrated += 1
+    for obj in bpy.data.objects:
+        if obj.get('archyar_kind') in {'WALL', 'OPENING'}:
+            obj.lock_location = (True, True, True)
+            obj.lock_rotation = (True, True, True)
+            obj.lock_scale = (True, True, True)
     return migrated
 
 
@@ -283,6 +295,11 @@ def create_opening(wall, t, style, width, height, sill, arch_rise=None):
     rise = min(.25, height * .35) if style == "arched" and arch_rise is None else (arch_rise or 0.0)
     t = _validated_t(wall, t, style, width, height, sill, rise)
     root = empty("Archyar | " + OPENINGS[style], parent=wall)
+    # A host-bound opening cannot be detached by a free Blender transform.
+    # It moves only along its wall through archyar_t / semantic gizmos.
+    root.lock_location = (True, True, True)
+    root.lock_rotation = (True, True, True)
+    root.lock_scale = (True, True, True)
     root["archyar_kind"] = "OPENING"
     root["archyar_id"] = str(uuid.uuid4())
     root["archyar_style"] = style
@@ -349,6 +366,34 @@ def apply_opening(root, style, width, height, sill, t, arch_rise, mirrored=False
             remove_tree(child)
     _opening_visual(root, style, width, height, wall.archyar_wall.thickness, arch_rise)
     return root
+
+
+def pose_opening(root, fraction, record=True):
+    """Pose generated leaves without rebuilding/cutting the wall or changing its host.
+
+    The scalar ID property is keyframeable and shared with Blender's timeline.
+    """
+    if root.get('archyar_kind') != 'OPENING':
+        return
+    f = max(0.0, min(1.0, float(fraction)))
+    style = root.get('archyar_style')
+    w = float(root['width'])
+    mirrored = bool(root.get('archyar_mirrored', False))
+    sign = -1 if mirrored else 1
+    if record:
+        root['archyar_open_fraction'] = f
+    for child in root.children:
+        if style == 'door' and child.name.startswith('Door hinge'):
+            child.rotation_euler.z = math.radians(105) * f * sign
+        elif style == 'hinged' and child.name.startswith('Window hinge'):
+            child.rotation_euler.z = math.radians(80) * f * sign
+        elif style == 'sliding-door' and child.name.startswith('Sliding door leaf'):
+            child.location.x = f * (w - .12) * sign
+        elif style == 'sliding-door' and child.name.startswith('Door handle'):
+            child.location.x = f * (w - .12) * sign + w * .36
+        elif style == 'sliding' and child.name.startswith('Sliding pane'):
+            pane = (w - .14) / 2
+            child.location.x = -pane / 2 + f * pane * sign
 
 
 def _opening_visual(root, style, w, h, depth, arch_rise=0):

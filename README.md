@@ -1,22 +1,23 @@
-# Archyar Blender — 0.4.0
+# Archyar Blender — 0.5.0
 
 The first installable Archyar modeling add-on for Blender 4.3+ (designed around Blender 4.5). The goal of this stage is **modeling and browsing the shared catalog**. Archyar project import/export is deliberately not included yet.
 
 ## Install once
 
 1. Open this repo's **Actions → Archyar Blender add-on package → latest successful run**.
-2. Download `archyar-blender-install`, unzip the downloaded *GitHub artifact* once, and keep the inner `archyar-blender-v0.4.0.zip` intact.
+2. Download `archyar-blender-install`, unzip the downloaded *GitHub artifact* once, and keep the inner `archyar-blender-v0.5.0.zip` intact.
 3. In Blender: **Edit → Preferences → Add-ons → Install from Disk**, select the inner ZIP, then enable **Archyar — Architectural Modeling**.
 4. In any 3D viewport press **N → Archyar**.
 
-For a local build, run `python scripts/build_zip.py` and install `dist/archyar-blender-v0.4.0.zip`. The standard-library test is `python -m unittest discover -s tests -v`.
+For a local build, run `python scripts/build_zip.py` and install `dist/archyar-blender-v0.5.0.zip`. The standard-library test is `python -m unittest discover -s tests -v`.
 
 ## Selection and editing: architectural controllers
 
 - **Walls are now semantic Empty controllers**, with a generated mesh child containing the visible wall surface and Boolean modifiers. Doors, windows, stairs and furniture already have semantic Empty roots. Blender still needs mesh data internally to render all of these objects; the generated pieces are implementation details, not user-facing edit targets.
 - Selecting the wall surface, a glass pane, jamb, stair tread or furniture part promotes selection to its nearest Archyar controller in Object Mode. Generated mesh transforms are locked. The entire door/window is therefore edited through one Archyar inspector, rather than the individual panes.
-- Selecting a wall immediately shows **two blue endpoint gizmos and an orange centre gizmo**. Drag them in 3D or from above. Use **Wall Handles on Selection** to show/hide them. The older **Legacy Drag Mode** is retained as a fallback with Esc-to-revert; **Set Exact Length** remains available.
-- **2D Floor Plan** in the Archyar sidebar switches the current Blender editor to top orthographic view, with wall outlines and door/window markers. **Return to 3D** restores that editor's previous perspective. To see plan and 3D at the same time, split the Blender editor and switch only one side to plan.
+- Selecting a wall shows **two blue endpoint gizmos and an orange centre gizmo, all at the wall base**. Drag them in 3D or from above, without picking a point at camera/eye height. Selecting an opening shows five handles: left/right width, offset along host wall, top height and sill.
+- **Open 2D Plan Window** duplicates the viewport into a **separate Blender window** and sets that window to top orthographic; the original 3D viewport never rotates. Both show live edits to the same scene. Use **Close 2D Plan Window** to dismiss the separate view.
+- Selecting an Archyar element can show a contextual properties popup (toggle **Auto Properties Popup**). Doors/windows expose exact width, height, sill, offset and a live **Open Amount** slider. Use **Insert Open Keyframe** to animate that slider with Blender's normal timeline.
 - Existing walls from 0.3 are upgraded to controller roots when the add-on registers or when an older `.blend` is opened. The original wall mesh, its modifiers, its opening objects and its element ID are retained. Save a copy of important `.blend` projects before updating while this migration awaits live Blender tests.
 
 ## Modeling
@@ -29,9 +30,9 @@ For a local build, run `python scripts/build_zip.py` and install `dist/archyar-b
 | Other elements | Floor, ceiling, column and railing primitives have wire previews. Straight stairs have live-editable run, width, total rise and step count, with a **Filled Underside** checkbox (unchecked initially). |
 | Services | Visible as a future category, but actual MEP route drawing is not yet implemented. |
 
-To edit an element later, select its Archyar controller, expand **Archyar → Selected Archyar Element** and change its properties. For an existing wall use **Set Exact Length** (keep start/end fixed) or drag the visible native Gizmos (blue endpoints; orange centre translates the wall). Coincident wall endpoints on the same elevation follow these edits; changes which violate a hosted opening's clearance are rejected. For existing openings saved by v0.1, press **Load Selected Values** before making edits. The Build panel has a separate construction grid with configurable step (10 cm default), independent snapping toggles for grid and wall endpoints, and an **Active Level (Z)** field for storeys. All dimensions are in metres, and **Scene → Units → Unit Scale must be 1.0**.
+To edit an element later, select its Archyar controller, use the selection popup or expand **Archyar → Selected Archyar Element** and change its properties. For an existing wall use **Set Exact Length** or the native endpoint/base handles. Coincident wall endpoints on the same elevation follow these edits; changes which violate a hosted opening's clearance are rejected. For existing openings saved by v0.1, press **Load Selected Values** before editing. The Build panel has a separate construction grid with a configurable step (10 cm default) and independent **Grid Snap**, **Wall Snap** and **Angle Snap** controls (15° default), plus an **Active Level (Z)** field for storeys. All dimensions are in metres, and **Scene → Units → Unit Scale must be 1.0**.
 
-Door/window, furniture, and structure modes now remain active for repeated placement until Esc, with in-viewport preview. The active tool is displayed in the Archyar sidebar. The doors and windows use the same numeric opening bounds as the Android model, but currently require the **Apply Opening Changes** button for committed edits. Image thumbnail cards and full on-canvas opening handles are still planned; this version uses Blender's normal sidebar operator lists.
+Door/window, furniture, and structure modes remain active for repeated placement until Esc, with in-viewport preview. The active tool is displayed in the Archyar sidebar. Doors/windows cannot detach from the host wall by moving a mesh; resize/position edits validate bounds and adjacent openings. Changes to width, height, sill and offset use **Apply Opening Changes**, while **Open Amount** animates the generated leaf without rebuilding the wall. Blender's asset picker still uses icon/text lists; richer rendered thumbnail cards are future work.
 
 Blender's visible asset names and UI controls are in English. Stable catalog IDs, geometry dimensions and opening-type codes remain identical to the Android implementation. See [the cross-app model contract](docs/MODEL_CONTRACT.md).
 

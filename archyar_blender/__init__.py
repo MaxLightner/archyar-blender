@@ -3,7 +3,7 @@
 bl_info = {
     "name": "Archyar — Architectural Modeling",
     "author": "POYARA / Archyar",
-    "version": (0, 4, 0),
+    "version": (0, 5, 0),
     "blender": (4, 3, 0),
     "location": "3D Viewport > Sidebar (N) > Archyar",
     "description": "Archyar catalog, metric walls, doors, windows, and Chido furniture",
