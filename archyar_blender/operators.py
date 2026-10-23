@@ -541,7 +541,7 @@ class ARCHYAR_OT_place_opening(_ViewportPlacement, bpy.types.Operator):
         point = ground_point(context, event)
         if point is None:
             return {'PASS_THROUGH'}
-        wall = self._wall or nearest_wall(point, elevation=context.scene.archyar_level_elevation)
+        wall = nearest_wall(point, elevation=context.scene.archyar_level_elevation) or self._wall
         if wall is None:
             if self._ghost is not None:
                 geometry.remove_tree(self._ghost)
@@ -609,7 +609,7 @@ class ARCHYAR_OT_place_furniture(_ViewportPlacement, bpy.types.Operator):
             return {'PASS_THROUGH'}
         asset = furniture(self.index)
         if asset.wall_mounted:
-            wall = self._wall or nearest_wall(point, elevation=context.scene.archyar_level_elevation)
+            wall = nearest_wall(point, elevation=context.scene.archyar_level_elevation) or self._wall
             if wall is None:
                 if event.type == 'LEFTMOUSE':
                     self.report({'WARNING'}, "Choose a wall for wall-mounted artwork")
@@ -739,24 +739,37 @@ class VIEW3D_PT_archyar(bpy.types.Panel):
             stairs_tool.kind = 'stairs'
             box_ui = layout.box()
             box_ui.label(text="Other architectural elements")
+            part_icons = {'column': 'MESH_CUBE', 'floor': 'MESH_GRID',
+                          'ceiling': 'MESH_PLANE', 'railing': 'MOD_WIREFRAME'}
             for key, name in BUILD_PARTS.items():
                 if key == 'stairs':
                     continue
-                action = box_ui.operator("archyar.place_structure", text=name)
+                action = box_ui.operator("archyar.place_structure", text=name,
+                                         icon=part_icons.get(key, 'OUTLINER_OB_MESH'))
                 action.kind = key
         elif scene.archyar_section == 'OPEN':
             layout.prop(scene, "archyar_open_width")
             layout.prop(scene, "archyar_open_height")
             layout.prop(scene, "archyar_sill")
             layout.label(text="Select wall, then choose opening:")
+            opening_icons = {'fixed': 'MOD_BOOLEAN', 'sliding': 'MOD_ARRAY',
+                             'hinged': 'MOD_BEVEL', 'arched': 'OUTLINER_OB_CURVE',
+                             'door': 'OUTLINER_OB_MESH', 'sliding-door': 'MOD_ARRAY'}
             for key, name in OPENINGS.items():
-                action = layout.operator("archyar.place_opening", text=name)
+                action = layout.operator("archyar.place_opening", text=name,
+                                         icon=opening_icons.get(key, 'OUTLINER_OB_MESH'))
                 action.style = key
         elif scene.archyar_section == 'FURN':
             layout.prop(scene, "archyar_furn_category", text="Category")
             visible = [a for a in FURNITURE if a.category == scene.archyar_furn_category]
+            asset_icons = {'seating': 'OUTLINER_OB_MESH', 'tables': 'MESH_CUBE',
+                           'decor': 'MESH_UVSPHERE', 'lighting': 'LIGHT',
+                           'rugs': 'MESH_PLANE', 'bedroom': 'OUTLINER_OB_MESH',
+                           'workspace': 'DESKTOP', 'dining': 'MESH_CUBE',
+                           'wall-art': 'IMAGE_DATA'}
             for asset in visible:
-                item = layout.operator("archyar.place_furniture", text=asset.name, icon='OUTLINER_OB_EMPTY')
+                item = layout.operator("archyar.place_furniture", text=asset.name,
+                                       icon=asset_icons.get(asset.category, 'OUTLINER_OB_MESH'))
                 item.index = asset.index
             layout.label(text="Click in the viewport to place")
         else:
