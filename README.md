@@ -1,15 +1,15 @@
-# Archyar Blender — 0.6.0
+# Archyar Blender — 0.7.0
 
-The first installable Archyar modeling add-on for Blender 4.3+ (designed around Blender 4.5). The goal of this stage is **modeling and browsing the shared catalog**. Archyar project import/export is deliberately not included yet.
+The installable Archyar modeling add-on for Blender 4.3+ (designed around Blender 4.5). The current stage provides parametric modeling, level management, and preliminary MEP authoring. Archyar project import/export is deliberately not included yet.
 
 ## Install once
 
 1. Open this repo's **Actions → Archyar Blender add-on package → latest successful run**.
-2. Download `archyar-blender-install`, unzip the downloaded *GitHub artifact* once, and keep the inner `archyar-blender-v0.6.0.zip` intact.
+2. Download `archyar-blender-install`, unzip the downloaded *GitHub artifact* once, and keep the inner `archyar-blender-v0.7.0.zip` intact.
 3. In Blender: **Edit → Preferences → Add-ons → Install from Disk**, select the inner ZIP, then enable **Archyar — Architectural Modeling**.
 4. In any 3D viewport press **N → Archyar**.
 
-For a local build, run `python scripts/build_zip.py` and install `dist/archyar-blender-v0.6.0.zip`. The standard-library test is `python -m unittest discover -s tests -v`.
+For a local build, run `python scripts/build_zip.py` and install `dist/archyar-blender-v0.7.0.zip`. The standard-library test is `python -m unittest discover -s tests -v`.
 
 ## Selection and editing: architectural controllers
 
@@ -28,11 +28,11 @@ For a local build, run `python scripts/build_zip.py` and install `dist/archyar-b
 | Openings | Choose fixed/sliding/hinged/arched window or hinged/sliding door; select a wall and see a wireframe model following the intended opening before clicking. Default doors are 0.90 × 2.10 m (as on Android), unless you override the dimensions. A non-destructive Boolean cuts the wall. Select the placed opening to edit width, height, sill, distance from wall start, type, arch rise and opening amount. |
 | Furniture | Nine category groups contain the **same 22 catalog items, IDs, and exact dimensions** as the Android app. Every furniture asset follows the cursor as a 3D wire preview before placement. Wall art attaches to a selected Archyar wall. |
 | Other elements | Floor, ceiling, column and railing primitives have wire previews. Straight stairs have live-editable run, width, total rise and step count, with a **Filled Underside** checkbox (unchecked initially). |
-| Services | Visible as a future category, but actual MEP route drawing is not yet implemented. |
+| Services | **Draw MEP Route** creates real-width solid rectangular ducts and round pipes/conduits with connected mitered elbows. Set section width, duct height, elevation, and 45°/90°/free corner snapping. Click route corners; Enter/right-click finishes. Select the route controller to edit cross-section and rebuild. **Wall Tube Light** creates a fluorescent fixture tied to an Archyar wall, with width, mounting height, host-side, and along-wall location in the inspector; it follows host edits and rejects out-of-bounds geometry. |
 
 To edit an element later, select its Archyar controller, use the selection popup or expand **Archyar → Selected Archyar Element** and change its properties. For an existing wall use **Set Exact Length** or the native endpoint/base handles. Coincident wall endpoints on the same elevation follow these edits; changes which violate a hosted opening's clearance are rejected. For existing openings saved by v0.1, press **Load Selected Values** before editing. The Build panel has a separate construction grid with a configurable step (10 cm default) and independent **Grid Snap**, **Wall Snap** and **Angle Snap** controls (15° default). All dimensions are in metres, and **Scene → Units → Unit Scale must be 1.0**.
 
-## Building floors (v0.6)
+## Building floors (v0.6+)
 
 - Under **Archyar → Building Floors**, select **Initialize Building Floors** in older projects or when beginning a new scene. Existing Archyar wall elevations are detected without changing their geometry.
 - Press **+** to add the next floor at *active floor elevation + storey height*, select its row to make it the working floor, and edit its **Name, Floor Elevation and Storey Height** numerically.
@@ -55,8 +55,9 @@ The update installs code locally; it neither uploads scenes nor edits the Androi
 
 ## Source compatibility and honest limits
 
-- The 22 item IDs, names, categories and width/height/depth are copied from [the private Archyar Android catalog](https://github.com/MaxLightner/archyar/blob/main/apps/android/app/src/main/java/ir/archiyar/domain/FurnitureCatalog.java), based on the Chido procedural geometry. **No GLB model collection exists in that source.** Meshes in Blender are procedural low-poly analogues, not pixel-exact replicas, textures or authored furniture assets.
+- The first 22 furniture item IDs, names, categories and width/height/depth are copied from [the private Archyar Android catalog](https://github.com/MaxLightner/archyar/blob/main/apps/android/app/src/main/java/ir/archiyar/domain/FurnitureCatalog.java), based on the Chido procedural geometry. **No GLB model collection exists in that source.** Meshes in Blender are procedural low-poly analogues, not pixel-exact replicas, textures or authored furniture assets.
 - Wall presets and the six opening variants correspond to `ToolCatalog.java`. The wall uses editable semantic properties and stable IDs. Archyar-side bidirectional project conversion and topology splitting are future integration tasks, not silently claimed as ready here.
 - The Blender vertical axis is Z, while the current Android model uses Y for height; mapping is deferred to the import/export layer.
+- **v0.7 MEP routes and wall lights remain Blender-authored elements only** until the semantic importer/exporter contract is implemented; a Blender scene cannot yet be transferred into the APK. A tested, unified Android APK is also pending the conflicting development-branch merge. This is intentionally not represented as ready.
 - Generated mesh children remain present in the Outliner and remain selectable long enough for Blender to detect a click; the selection handler then switches to their controller. This avoids giving users raw mesh modeling tools as the primary editing workflow, but it is **not a security boundary** against deliberate edits in Blender or external scripts.
 - The UI is a first prototype; automatic selection promotion, native Gizmo callbacks, old `.blend` migration, Boolean evaluation, and Windows installation still require a real Blender 4.5 viewport test. Pure-Python checks do not prove Blender compatibility. Undo behavior of the new Gizmos also needs a live test; Legacy Drag Mode remains the proven code path for an atomic revert.
