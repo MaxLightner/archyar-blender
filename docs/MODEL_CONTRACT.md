@@ -5,7 +5,7 @@ Any behavioral change to an opening, wall, stair or catalog asset must be review
 
 | Feature | Shared semantic rule |
 | --- | --- |
-| Units | One model unit is one metre. Blender draws on XY and uses Z for height; Android uses X/Z and Y for height. |
+| Units and coordinates | One model unit is one metre. The canonical project frame uses X/Z for the ground plane and +Y for height; Blender uses X/Y for the ground plane and +Z for height. Convert at the adapter boundary with Blender=(projectX, -projectZ, projectY), preserving a right-handed frame. See [coordinate system](COORDINATE_SYSTEM.md) and [wire schemas](../contracts/v1/README.md). |
 | Furniture | `chido-0` through `chido-21`: same category, dimensions (width, height, depth), and semantic index. Mesh algorithms may differ. |
 | Windows | `fixed`, `sliding`, `hinged`, `arched`. |
 | Doors | `door`, `sliding-door`; sill must be 0–1 cm. |
@@ -35,3 +35,6 @@ Any behavioral change to an opening, wall, stair or catalog asset must be review
 Stair-filled state is represented in Android's existing `WorkspaceModel.Item.style` string, already saved by `ProjectSnapshotCodec` version 1. No snapshot schema migration is needed. Blender stores the equivalent as `archyar_stair_style`. The apps do not yet exchange objects; this documents their matching logic for future import/export.
 
 Current intentional differences: Android retains Persian RTL UI; Blender uses English UI because built-in Blender fonts are unsuitable for Persian. Preview rendering detail and furniture low-poly mesh construction are platform-specific. Blender's wall joints are currently inferred by equal XY endpoints at the same Z elevation; Android persists stable node IDs and automatically splits at junctions. Both reject invalid connected edits. Blender catalog cards use its existing icon picker, and Android uses the same visual palette in plan and AR. The AR drag gesture now maps touched ground-level markers through a calibrated floor-plane ray and validates the edit on release; its usability and proximity tuning require real device verification. The 3D visual correctness of both still needs in-app device testing.
+
+
+The versioned, machine-readable interchange contract is now defined in [`../contracts/v1`](../contracts/v1/README.md). This describes the protocol only; object import/export and live synchronization remain future implementation work.

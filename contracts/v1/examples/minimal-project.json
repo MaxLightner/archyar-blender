@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "projectId": "550e8400-e29b-41d4-a716-446655440000",
+  "name": "Shared Room Example",
+  "coordinateSystem": {
+    "id": "archyar-project-v1",
+    "units": "m",
+    "handedness": "right",
+    "upAxis": "Y",
+    "groundPlane": "XZ",
+    "origin": [0, 0, 0],
+    "headingReference": "confirmed-floor-heading"
+  },
+  "originFloorId": "550e8400-e29b-41d4-a716-446655440001",
+  "revision": 0,
+  "floors": [
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440001",
+      "name": "Ground Floor",
+      "elevation": 0,
+      "ceilingHeight": 3,
+      "visible": true
+    }
+  ],
+  "objects": [
+    {
+      "schemaVersion": 1,
+      "id": "550e8400-e29b-41d4-a716-446655440002",
+      "kind": "wall",
+      "floorId": "550e8400-e29b-41d4-a716-446655440001",
+      "name": "North wall",
+      "layer": "Walls",
+      "locked": false,
+      "revision": 0,
+      "source": "android",
+      "parameters": {
+        "start": [0, 0],
+        "end": [4, 0],
+        "baseElevation": 0,
+        "height": 2.8,
+        "thickness": 0.15,
+        "autoHeight": false
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "550e8400-e29b-41d4-a716-446655440003",
+      "kind": "opening",
+      "floorId": "550e8400-e29b-41d4-a716-446655440001",
+      "hostId": "550e8400-e29b-41d4-a716-446655440002",
+      "name": "Window A",
+      "layer": "Doors/Windows",
+      "locked": false,
+      "revision": 0,
+      "source": "blender",
+      "parameters": {
+        "style": "fixed",
+        "width": 1.2,
+        "height": 1.4,
+        "sill": 0.9,
+        "hostT": 0.5,
+        "archRise": 0,
+        "openFraction": 0,
+        "mirrored": false
+      }
+    }
+  ]
+}

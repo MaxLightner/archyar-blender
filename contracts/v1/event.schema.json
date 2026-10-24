@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Archyar Realtime Event Envelope v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion", "eventId", "projectId", "eventType", "actorId",
+    "sessionId", "sequence", "sentAt", "payload"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "eventId": { "type": "string", "format": "uuid" },
+    "projectId": { "type": "string", "format": "uuid" },
+    "eventType": {
+      "type": "string",
+      "enum": [
+        "project.snapshot", "object.upsert", "object.delete", "camera.pose",
+        "session.joined", "session.left"
+      ]
+    },
+    "actorId": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "sessionId": { "type": "string", "format": "uuid" },
+    "sequence": { "type": "integer", "minimum": 0 },
+    "sentAt": { "type": "string", "format": "date-time" },
+    "baseRevision": {
+      "oneOf": [
+        { "type": "integer", "minimum": 0 },
+        { "type": "null" }
+      ]
+    },
+    "payload": { "type": "object" }
+  }
+}

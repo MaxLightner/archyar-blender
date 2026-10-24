@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "eventId": "550e8400-e29b-41d4-a716-446655440020",
+  "projectId": "550e8400-e29b-41d4-a716-446655440000",
+  "eventType": "object.upsert",
+  "actorId": "blender-addon",
+  "sessionId": "550e8400-e29b-41d4-a716-446655440011",
+  "sequence": 7,
+  "sentAt": "2026-10-25T00:00:00Z",
+  "baseRevision": 0,
+  "payload": {
+    "object": {
+      "schemaVersion": 1,
+      "id": "550e8400-e29b-41d4-a716-446655440002",
+      "kind": "wall",
+      "floorId": "550e8400-e29b-41d4-a716-446655440001",
+      "name": "North wall",
+      "layer": "Walls",
+      "locked": false,
+      "revision": 1,
+      "source": "blender",
+      "parameters": {
+        "start": [0, 0],
+        "end": [4, 0],
+        "baseElevation": 0,
+        "height": 2.8,
+        "thickness": 0.15,
+        "autoHeight": false
+      }
+    }
+  }
+}

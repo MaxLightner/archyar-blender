@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Archyar Shared Camera Pose v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion", "projectId", "sessionId", "floorId", "sequence",
+    "timestampMs", "source", "position", "rotation", "fovYDegrees", "aspectRatio",
+    "projectRevision"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "projectId": { "type": "string", "format": "uuid" },
+    "sessionId": { "type": "string", "format": "uuid" },
+    "floorId": { "type": "string", "format": "uuid" },
+    "sequence": { "type": "integer", "minimum": 0 },
+    "timestampMs": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Monotonic milliseconds within this session; not a wall-clock timestamp."
+    },
+    "source": { "type": "string", "enum": ["android-ar", "blender-viewport", "web-viewer"] },
+    "position": { "$ref": "#/$defs/vector3" },
+    "rotation": { "$ref": "#/$defs/quaternion" },
+    "fovYDegrees": { "type": "number", "minimum": 10, "maximum": 150 },
+    "aspectRatio": { "type": "number", "exclusiveMinimum": 0, "maximum": 10 },
+    "projectRevision": { "type": "integer", "minimum": 0 }
+  },
+  "$defs": {
+    "vector3": {
+      "type": "array",
+      "items": { "type": "number" },
+      "minItems": 3,
+      "maxItems": 3
+    },
+    "quaternion": {
+      "type": "array",
+      "items": { "type": "number" },
+      "minItems": 4,
+      "maxItems": 4
+    }
+  }
+}

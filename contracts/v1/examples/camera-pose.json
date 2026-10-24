@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "projectId": "550e8400-e29b-41d4-a716-446655440000",
+  "sessionId": "550e8400-e29b-41d4-a716-446655440010",
+  "floorId": "550e8400-e29b-41d4-a716-446655440001",
+  "sequence": 42,
+  "timestampMs": 12345,
+  "source": "android-ar",
+  "position": [2, 1.6, 1.5],
+  "rotation": [0, 0, 0, 1],
+  "fovYDegrees": 60,
+  "aspectRatio": 1.7777778,
+  "projectRevision": 0
+}
