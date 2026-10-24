@@ -39,6 +39,33 @@ def validator_for(name):
     )
 
 
+def validate_project_references(project):
+    """Validate cross-field identity constraints that JSON Schema cannot express."""
+    floors = project["floors"]
+    objects = project["objects"]
+    floor_ids = {floor["id"] for floor in floors}
+    object_by_id = {obj["id"]: obj for obj in objects}
+    if len(floor_ids) != len(floors):
+        raise ValueError("Duplicate floor ID")
+    if len(object_by_id) != len(objects):
+        raise ValueError("Duplicate object ID")
+    if project["originFloorId"] not in floor_ids:
+        raise ValueError("Origin floor does not exist")
+    origin_floor = next(floor for floor in floors if floor["id"] == project["originFloorId"])
+    if not math.isclose(origin_floor["elevation"], 0.0, abs_tol=1e-9):
+        raise ValueError("Origin floor elevation must be zero")
+    for obj in objects:
+        if obj["floorId"] not in floor_ids:
+            raise ValueError("Object references an unknown floor")
+        host_id = obj.get("hostId")
+        if host_id is not None and host_id not in object_by_id:
+            raise ValueError("Object references an unknown host")
+        if obj["kind"] == "opening":
+            host = object_by_id.get(host_id)
+            if host is None or host["kind"] != "wall":
+                raise ValueError("Opening host must be a wall")
+
+
 class SharedProjectContractTests(unittest.TestCase):
     def test_all_schemas_are_valid_json_schema(self):
         for name, schema in SCHEMAS.items():
@@ -49,15 +76,7 @@ class SharedProjectContractTests(unittest.TestCase):
         project = load_json(CONTRACT_DIR / "examples" / "minimal-project.json")
         validator_for("project.schema.json").validate(project)
 
-        floor_ids = {floor["id"] for floor in project["floors"]}
-        object_ids = {obj["id"] for obj in project["objects"]}
-        self.assertIn(project["originFloorId"], floor_ids)
-        self.assertEqual(len(floor_ids), len(project["floors"]))
-        self.assertEqual(len(object_ids), len(project["objects"]))
-        for obj in project["objects"]:
-            self.assertIn(obj["floorId"], floor_ids)
-            if obj.get("hostId") is not None:
-                self.assertIn(obj["hostId"], object_ids)
+        validate_project_references(project)
         wall = next(obj for obj in project["objects"] if obj["kind"] == "wall")
         opening = next(obj for obj in project["objects"] if obj["kind"] == "opening")
         self.assertEqual(opening["hostId"], wall["id"])
@@ -92,12 +111,12 @@ class SharedProjectContractTests(unittest.TestCase):
             self.assertTrue(math.isclose(actual, expected, abs_tol=1e-9))
         self.assertEqual(blender, (1.25, 3.75, 2.5))
 
-    def test_bad_host_reference_is_caught_by_fixture_invariant(self):
+    def test_bad_host_reference_is_rejected(self):
         project = load_json(CONTRACT_DIR / "examples" / "minimal-project.json")
-        object_ids = {obj["id"] for obj in project["objects"]}
         opening = next(obj for obj in project["objects"] if obj["kind"] == "opening")
         opening["hostId"] = "550e8400-e29b-41d4-a716-446655440099"
-        self.assertNotIn(opening["hostId"], object_ids)
+        with self.assertRaisesRegex(ValueError, "unknown host"):
+            validate_project_references(project)
 
 
 if __name__ == "__main__":
