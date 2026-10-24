@@ -6,7 +6,7 @@ This directory defines the versioned, transport-independent data contract for sh
 - the Archyar Blender add-on (Python),
 - the Archyar web viewer and lightweight web editor.
 
-**This commit establishes the contract only. It does not claim that live synchronization or import/export is already implemented.**
+**Blender v0.8.0 now implements file-based JSON import/export for the supported object kinds listed in the add-on README. This does not yet implement live transport, Android import/export, or browser live viewing.**
 
 ## Canonical files
 

@@ -3,6 +3,8 @@ name: Archyar Blender add-on package
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 jobs:
@@ -25,5 +27,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: archyar-blender-install
-          path: dist/archyar-blender-v0.7.0.zip
+          path: dist/archyar-blender-v0.8.0.zip
           if-no-files-found: error
