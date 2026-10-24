@@ -1,0 +1,111 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Archyar Semantic Object v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "id", "kind", "floorId", "parameters", "revision"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "id": { "type": "string", "format": "uuid" },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "wall", "opening", "floor", "ceiling", "roof", "column", "railing",
+        "stair", "pipe", "duct", "conduit", "furniture", "void", "custom"
+      ]
+    },
+    "floorId": { "type": "string", "format": "uuid" },
+    "hostId": {
+      "oneOf": [
+        { "type": "string", "format": "uuid" },
+        { "type": "null" }
+      ]
+    },
+    "name": { "type": "string", "maxLength": 200 },
+    "layer": { "type": "string", "maxLength": 120 },
+    "locked": { "type": "boolean" },
+    "revision": { "type": "integer", "minimum": 0 },
+    "source": { "type": "string", "enum": ["android", "blender", "web", "import"] },
+    "transform": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "position": { "$ref": "#/$defs/vector3" },
+        "rotation": { "$ref": "#/$defs/quaternion" },
+        "scale": { "$ref": "#/$defs/positiveVector3" }
+      }
+    },
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "start": { "$ref": "#/$defs/vector2" },
+        "end": { "$ref": "#/$defs/vector2" },
+        "baseElevation": { "type": "number" },
+        "height": { "type": "number", "exclusiveMinimum": 0 },
+        "thickness": { "type": "number", "exclusiveMinimum": 0 },
+        "width": { "type": "number", "exclusiveMinimum": 0 },
+        "depth": { "type": "number", "exclusiveMinimum": 0 },
+        "sill": { "type": "number", "minimum": 0 },
+        "hostT": { "type": "number", "minimum": 0, "maximum": 1 },
+        "archRise": { "type": "number", "minimum": 0 },
+        "openFraction": { "type": "number", "minimum": 0, "maximum": 1 },
+        "style": { "type": "string" },
+        "material": { "type": "string" },
+        "autoHeight": { "type": "boolean" },
+        "mirrored": { "type": "boolean" },
+        "lightOn": { "type": "boolean" },
+        "stairCount": { "type": "integer", "minimum": 1, "maximum": 100 },
+        "catalogId": { "type": "string" },
+        "outline": {
+          "type": "array",
+          "minItems": 3,
+          "items": { "$ref": "#/$defs/vector2" }
+        },
+        "route": {
+          "type": "array",
+          "minItems": 2,
+          "items": { "$ref": "#/$defs/vector3" }
+        }
+      },
+      "additionalProperties": true
+    },
+    "geometryAsset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["format", "uri", "sha256"],
+      "properties": {
+        "format": { "type": "string", "enum": ["glb", "gltf"] },
+        "uri": { "type": "string", "format": "uri-reference", "minLength": 1 },
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "byteLength": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "updatedAt": { "type": "string", "format": "date-time" }
+  },
+  "$defs": {
+    "vector2": {
+      "type": "array",
+      "items": { "type": "number" },
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "vector3": {
+      "type": "array",
+      "items": { "type": "number" },
+      "minItems": 3,
+      "maxItems": 3
+    },
+    "quaternion": {
+      "type": "array",
+      "items": { "type": "number" },
+      "minItems": 4,
+      "maxItems": 4
+    },
+    "positiveVector3": {
+      "type": "array",
+      "items": { "type": "number", "exclusiveMinimum": 0 },
+      "minItems": 3,
+      "maxItems": 3
+    }
+  }
+}

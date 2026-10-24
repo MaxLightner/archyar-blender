@@ -61,3 +61,17 @@ The update installs code locally; it neither uploads scenes nor edits the Androi
 - **v0.7 MEP routes and wall lights remain Blender-authored elements only** until the semantic importer/exporter contract is implemented; a Blender scene cannot yet be transferred into the APK. A tested, unified Android APK is also pending the conflicting development-branch merge. This is intentionally not represented as ready.
 - Generated mesh children remain present in the Outliner and remain selectable long enough for Blender to detect a click; the selection handler then switches to their controller. This avoids giving users raw mesh modeling tools as the primary editing workflow, but it is **not a security boundary** against deliberate edits in Blender or external scripts.
 - The UI is a first prototype; automatic selection promotion, native Gizmo callbacks, old `.blend` migration, Boolean evaluation, and Windows installation still require a real Blender 4.5 viewport test. Pure-Python checks do not prove Blender compatibility. Undo behavior of the new Gizmos also needs a live test; Legacy Drag Mode remains the proven code path for an atomic revert.
+
+
+## Shared project contract (v1)
+
+The cross-client data contract for Android, Blender, and the future web viewer/editor is defined in [`contracts/v1`](contracts/v1/README.md). The canonical coordinate frame and Blender axis conversion are specified in [`docs/COORDINATE_SYSTEM.md`](docs/COORDINATE_SYSTEM.md).
+
+This milestone establishes versioned schemas and test fixtures only. Live synchronization, import/export, and browser editing are not implemented by this change.
+
+Validate the contract with:
+
+```sh
+python -m pip install -r requirements-contracts.txt
+python -m unittest discover -s tests -v
+```

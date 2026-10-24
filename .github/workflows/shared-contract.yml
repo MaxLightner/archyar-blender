@@ -1,0 +1,39 @@
+name: Shared project contract
+on:
+  push:
+    branches: [main]
+    paths:
+      - "contracts/v1/**"
+      - "docs/COORDINATE_SYSTEM.md"
+      - "docs/MODEL_CONTRACT.md"
+      - "tests/test_shared_contract.py"
+      - "requirements-contracts.txt"
+      - ".github/workflows/shared-contract.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "contracts/v1/**"
+      - "docs/COORDINATE_SYSTEM.md"
+      - "docs/MODEL_CONTRACT.md"
+      - "tests/test_shared_contract.py"
+      - "requirements-contracts.txt"
+      - ".github/workflows/shared-contract.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install contract test dependency
+        run: python -m pip install -r requirements-contracts.txt
+      - name: Validate shared schemas and fixtures
+        run: python -m unittest discover -s tests -p "test_shared_contract.py" -v
+      - name: Run existing Blender add-on tests
+        run: python -m unittest discover -s tests -v
+      - name: Compile Blender add-on modules
+        run: python -m compileall -q archyar_blender
