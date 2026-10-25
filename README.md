@@ -1,15 +1,15 @@
-# Archyar Blender — 0.8.0
+# Archyar Blender — 0.9.0
 
-The installable Archyar modeling add-on for Blender 4.3+ (designed around Blender 4.5). Version 0.8.0 adds v1 JSON project import/export for floors, walls, hosted doors/windows, furniture, structural primitives, stairs, MEP routes, and wall-mounted tube lights. Live network synchronization and Android-side import/export are not included in this milestone.
+The installable Archyar modeling add-on for Blender 4.3+ (designed around Blender 4.5). Version 0.9.0 adds v1 JSON project import/export for floors, walls, hosted doors/windows, furniture, structural primitives, stairs, MEP routes, and wall-mounted tube lights. Live network synchronization and Android-side import/export are not included in this milestone.
 
 ## Install once
 
 1. Open this repo's **Actions → Archyar Blender add-on package → latest successful run**.
-2. Download `archyar-blender-install`, unzip the downloaded *GitHub artifact* once, and keep the inner `archyar-blender-v0.8.0.zip` intact.
+2. Download `archyar-blender-install`, unzip the downloaded *GitHub artifact* once, and keep the inner `archyar-blender-v0.9.0.zip` intact.
 3. In Blender: **Edit → Preferences → Add-ons → Install from Disk**, select the inner ZIP, then enable **Archyar — Architectural Modeling**.
 4. In any 3D viewport press **N → Archyar**.
 
-For a local build, run `python scripts/build_zip.py` and install `dist/archyar-blender-v0.8.0.zip`. The standard-library test is `python -m unittest discover -s tests -v`.
+For a local build, run `python scripts/build_zip.py` and install `dist/archyar-blender-v0.9.0.zip`. The standard-library test is `python -m unittest discover -s tests -v`.
 
 ## Selection and editing: architectural controllers
 
@@ -77,10 +77,18 @@ python -m unittest discover -s tests -v
 ```
 
 
-## Shared project JSON (v0.8.0)
+## Shared project JSON (v0.9.0)
 
 In the Archyar sidebar, expand **Project Interchange** to export a v1 JSON snapshot or import one from disk. The adapter preserves semantic UUIDs, metric dimensions, floor identities, and wall-hosted opening relationships. Blender's Z-up axes are converted at the interchange boundary; generated mesh pieces are never exported as separate architectural elements.
 
 Import merges by stable ID when the scene is already associated with the same project. If the scene contains a different Archyar project, import is blocked unless **Replace Existing Archyar Model** is explicitly enabled. Merge mode does not delete local elements absent from the incoming snapshot. Unsupported contract kinds (roof, void, and arbitrary custom geometry assets) are rejected before the scene is changed rather than silently discarded.
 
 This is file-based model transfer, not live synchronization. The web viewer and Android app still need their own adapters before they can consume this export directly.
+
+## Opt-in Blender → web live viewer (v0.9.0)
+
+The **Live Project Viewer** panel can connect to a separately hosted Archyar relay. Start a session to publish the initial semantic JSON project and copy its viewer URL. A timer then publishes changed project snapshots (every 2 seconds when the model changes) and low-bandwidth Blender viewport pose updates (~6 per second). No video is transmitted.
+
+The relay URL defaults to http://127.0.0.1:8787 for local development. Remote endpoints must use HTTPS. Access tokens exist only in add-on module memory, not .blend files; the viewer link uses a separate short-lived token. On a revision conflict, automatic model uploads stop rather than overwriting the other editor.
+
+This is a **one-way live publisher**, not full two-way Blender collaboration yet. Receiving an editor's remote changes into Blender, production relay hosting and Android-side camera publishing remain separate work. Closing Blender or stopping the session stops local publication. The relay must revoke the session on DELETE or expire it on a timer.
