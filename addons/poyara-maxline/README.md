@@ -1,4 +1,4 @@
-# POYARA MaxLine — Edit Spline / Edit Poly for Blender
+# POYARA MaxLine v0.2.0 — Edit Spline / Edit Poly for Blender
 
 An early, installable Blender add-on for **Blender 4.3+** (designed for 4.4/4.5)
 with familiar 3ds Max-style tool groupings in the **POYARA** sidebar.
@@ -8,7 +8,7 @@ Smart Extrude replacement.** Native Blender operators are used where possible.
 
 ## Install
 
-1. Download `POYARA-MaxLine-v0.1.0.zip`.
+1. Download `POYARA-MaxLine-v0.2.0.zip`.
 2. Blender → **Edit > Preferences > Add-ons** → dropdown **Install from Disk**.
 3. Select the ZIP; enable **POYARA MaxLine | Edit Spline + Edit Poly**.
 4. In a 3D View press **N**, then open the **POYARA** tab.
@@ -20,9 +20,9 @@ or network access are required.
 
 | Tab | Tools |
 |---|---|
-| **Edit Poly** | Mesh sub-object selection; Connect (Segments, Pinch, Slide); numeric Extrude; chamfer/fillet; native inset, bridge, weld, etc. |
-| **Edit Line** | Create Line; Max-like point/segment/spline editor; native spline operations; spline fillet/chamfer; vertex XYZ dialog. |
-| **Extras** | Three-click Box; non-destructive Boolean controls; Array with copy/instance and rotation; object Align; Box dimensions. |
+| **Extras** *(first/default)* | Surface-snapping three-click Box; Plane, Circle, Rectangle, Spiral; Archyar Wall/Door/Window; non-destructive Boolean; Array and Align; live Array parameters. |
+| **Edit Poly** | Mesh sub-object selection; Grow/Shrink/Loop/Ring/Angle; native safer Connect; numeric Extrude; live Bevel modifiers; native inset, bridge and weld. |
+| **Edit Line** | Create Line; Max-like point/segment/spline editor; native spline operations; spline fillet/chamfer and live Geometry Nodes; vertex XYZ dialog. |
 
 ## Create Line (Max-style)
 
@@ -66,18 +66,72 @@ Mesh Edit Mode. Press **Connect...** and set:
 - **Slide**: slides the group along the two chosen edges.
 
 The operator works with selected quad edge pairs; this early version does **not
-yet** walk arbitrary edge loops across a whole mesh.
+yet** walk arbitrary edge loops across a whole mesh. Following a user-reported
+Blender crash in v0.1.0, v0.2.0 delegates **topology changes** to Blender's
+own `subdivide_edgering` operator and changes *only vertex positions* for
+Pinch/Slide. This reduces risk, but an in-Blender runtime regression test is
+still required before considering the crash fixed.
 
 ## Three-click Box
 
 In **Object Mode**, open **Extras > Box | 3 Clicks**:
 
-1. Left-click the first corner of the base (world XY plane at the 3D cursor Z).
+1. Left-click the first corner of the base (on the mesh surface under the cursor when AutoGrid is on; otherwise world XY at the 3D cursor).
 2. Left-click the diagonally opposite base corner.
 3. Move the cursor to set vertical height and left-click again.
 
-Hold Ctrl for snapping. A near-top view uses cursor vertical screen movement
-for height. Select a created box and use **Box Parameters** to type dimensions.
+**AutoGrid / Surface Snap** is enabled in Extras by default. The first click
+raycasts an existing mesh surface, derives a construction plane from its normal,
+and places the box on that plane. The next two clicks define the surface-aligned
+base and its perpendicular height. Without a surface hit, the drawing plane
+falls back to the XY plane at the 3D cursor. Hold Ctrl for grid snapping within
+the selected plane. Select a created box and use **Box Parameters** to type
+dimensions.
+
+## Max-style Polygon Selection
+
+Under **Edit Poly → Selection**, use the native Vertex/Edge/Border/Polygon/
+Element modes. **Grow**, **Shrink**, **Loop** and **Ring** call Blender's own
+selection tools. **Select Adjacent by Angle** runs a flood-fill from selected
+faces and grows only through shared-edge neighboring faces whose normals differ
+by at most the adjustable **Angle** (default 5 degrees); it does not select
+disconnected parallel parts of the model.
+**Boundary from Selected Faces** uses Blender's native Region to Loop. Switching
+to **Border** selection level no longer clears the existing selection or picks
+every boundary edge in the whole object.
+
+## New primitives
+
+- **Plane** — width, length and independent X/Y subdivisions.
+- **Circle** — radius, four-segment Bezier spline with arc handles.
+- **Rectangle** — width, length and optional rounded corners.
+- **Spiral** — inner/outer radius, turns, height and resolution.
+
+## Archyar architectural creation
+
+**Wall**, **Door** and **Window** buttons live beside the primitives in Extras.
+When the original **Archyar Blender** add-on is enabled, these buttons call its
+actual `archyar.draw_wall` and `archyar.place_opening` operators: wall-hosted
+openings, semantic parameters, Boolean cutters and its full opening models are
+handled by Archyar. With only POYARA MaxLine installed, self-contained fallback
+tools are available for basic walls, rectangular doors/windows, frame meshes
+and real Boolean wall cutouts. The fallback does **not** reproduce every advanced
+Archyar parametric feature or arched-window geometry.
+
+## Live parameters
+
+- **Extras → Live Array Modifier:** change count and XYZ step in the POYARA
+  panel; the viewport updates automatically. The older copy/instance Array
+  dialog (with rotation) is still available but is not a live modifier.
+- **Edit Poly → Live Chamfer / Live Fillet:** creates a Blender Bevel modifier.
+  Adjust width, segment count, angle limit and affected edges in the POYARA
+  panel; no need to open the native Modifiers tab. This modifies the mesh
+  non-destructively and uses the modifier's edge limits, not a temporary
+  arbitrary face-selection mask.
+- **Edit Line → Live Fillet / Live Chamfer:** adds a Geometry Nodes modifier
+  using a Fillet Curve node. Edit radius/segments directly in the POYARA panel.
+  This affects curve corners as a whole; the older selected-vertex operation
+  remains available for individually chosen corners.
 
 ## Other tools
 
@@ -107,7 +161,8 @@ for height. Select a created box and use **Box Parameters** to type dimensions.
   local Blender executable; please report issues with Blender version and steps.
 - Mesh Connect currently supports one quad pair; the native Line creator uses
   a view-oriented plane rather than full Max construction-plane controls.
-- Doors, windows, stairs and railings are reserved for a future Extras version.
+- Full parametric Archyar parity requires the original Archyar add-on; the
+  fallback is intentionally smaller. Stairs and railings remain future work.
 
 ## Developer checks
 

@@ -18,14 +18,53 @@ def _snap(p, context, use_snap):
     return Vector(tuple(round(x / step) * step for x in p))
 
 
-def _box_points(first, second, height):
-    x0, x1 = sorted((first.x, second.x))
-    y0, y1 = sorted((first.y, second.y))
-    z0, z1 = sorted((first.z, first.z + height))
-    return [Vector(p) for p in [
+def _snap_in_plane(point, origin, basis, context, use_snap):
+    if point is None or not use_snap:
+        return point
+    step = context.scene.poyara_maxline.snap_step
+    local = basis.transposed() @ (point - origin)
+    local.x = round(local.x / step) * step
+    local.y = round(local.y / step) * step
+    local.z = 0.0
+    return origin + basis @ local
+
+
+def _box_points(first, second, height, basis):
+    """Create corners on the first picked construction plane, not world XY."""
+    local = basis.transposed() @ (second - first)
+    x0, x1 = sorted((0.0, local.x))
+    y0, y1 = sorted((0.0, local.y))
+    z0, z1 = sorted((0.0, height))
+    return [first + basis @ Vector(p) for p in [
         (x0, y0, z0), (x1, y0, z0), (x1, y1, z0), (x0, y1, z0),
         (x0, y0, z1), (x1, y0, z1), (x1, y1, z1), (x0, y1, z1),
     ]]
+
+
+def _pick_surface_frame(context, event):
+    """AutoGrid frame from evaluated scene raycast, fallback to cursor XY."""
+    from bpy_extras import view3d_utils
+    region, rv3d = context.region, context.space_data.region_3d
+    mouse = (event.mouse_region_x, event.mouse_region_y)
+    origin = view3d_utils.region_2d_to_origin_3d(region, rv3d, mouse)
+    ray = view3d_utils.region_2d_to_vector_3d(region, rv3d, mouse)
+    if context.scene.poyara_maxline.surface_snap:
+        hit, location, normal, _, hit_obj, _ = context.scene.ray_cast(
+            context.evaluated_depsgraph_get(), origin, ray, distance=10000.0
+        )
+        if hit and hit_obj is not None:
+            normal = normal.normalized()
+            tangent = Vector((1, 0, 0)) - normal * normal.x
+            if tangent.length_squared < 0.01:
+                tangent = Vector((0, 1, 0)) - normal * normal.y
+            tangent.normalize()
+            bitangent = normal.cross(tangent).normalized()
+            basis = Matrix((tangent, bitangent, normal)).transposed()
+            return location, normal, basis
+    origin = context.scene.cursor.location.copy()
+    normal = Vector((0, 0, 1))
+    basis = Matrix.Identity(3)
+    return origin, normal, basis
 
 
 _BOX_EDGES = [(0, 1), (1, 2), (2, 3), (3, 0),
@@ -46,7 +85,7 @@ def _draw_box(operator, context):
         if target is None:
             return
         h = operator._height if operator._stage == 2 else 0.0
-        corners = _box_points(operator._first, target, h)
+        corners = _box_points(operator._first, target, h, operator._basis)
         coords = [_project(context, p) for p in corners]
         verts = []
         for a, b in _BOX_EDGES:
@@ -79,25 +118,25 @@ class POYARA_OT_box_3point(Operator):
         self._height = 0.0
         self._plane = context.scene.cursor.location.copy()
         self._normal = Vector((0, 0, 1))
+        self._basis = Matrix.Identity(3)
         self._handler = bpy.types.SpaceView3D.draw_handler_add(
             _draw_box, (self, context), 'WINDOW', 'POST_PIXEL'
         )
-        context.workspace.status_text_set('MAX BOX: click corner 1 / corner 2 / height | Ctrl snap | Esc cancel')
+        context.workspace.status_text_set('MAX BOX AutoGrid: click surface/base corner / opposite corner / height | Ctrl snap | Esc cancel')
         context.window_manager.modal_handler_add(self)
         return {'RUNNING_MODAL'}
 
     def _get_height(self, context, event):
         base = (self._first + self._second) / 2
-        base.z = self._plane.z
         region, rv3d = context.region, context.space_data.region_3d
         from bpy_extras import view3d_utils
         coords = (event.mouse_region_x, event.mouse_region_y)
         origin = view3d_utils.region_2d_to_origin_3d(region, rv3d, coords)
         ray = view3d_utils.region_2d_to_vector_3d(region, rv3d, coords)
         candidates = geometry.intersect_line_line(origin, origin + ray * 1000.0,
-                                                   base, base + Vector((0, 0, 1)))
-        if candidates is not None and abs(ray.z) < 0.98:
-            return candidates[1].z - base.z
+                                                   base, base + self._normal)
+        if candidates is not None and abs(ray.dot(self._normal)) < 0.98:
+            return (candidates[1] - base).dot(self._normal)
         # In top/near-top views the height axis is parallel to the view ray.
         factor = max(0.001, rv3d.view_distance * 1.6 / max(region.height, 1))
         return (event.mouse_region_y - self._height_start_y) * factor
@@ -112,9 +151,9 @@ class POYARA_OT_box_3point(Operator):
             return {'PASS_THROUGH'}
         if event.type == 'MOUSEMOVE':
             if self._stage < 2:
-                self._hover = _snap(_world_from_mouse(
+                self._hover = _snap_in_plane(_world_from_mouse(
                     context, event.mouse_region_x, event.mouse_region_y, self._plane, self._normal
-                ), context, event.ctrl)
+                ), self._plane, self._basis, context, event.ctrl)
             else:
                 self._height = self._get_height(context, event)
                 if event.ctrl:
@@ -128,16 +167,19 @@ class POYARA_OT_box_3point(Operator):
         if event.type != 'LEFTMOUSE' or event.value != 'PRESS':
             return {'PASS_THROUGH'}
         if self._stage < 2:
-            p = _snap(_world_from_mouse(
+            if self._stage == 0:
+                self._plane, self._normal, self._basis = _pick_surface_frame(context, event)
+            p = _snap_in_plane(_world_from_mouse(
                 context, event.mouse_region_x, event.mouse_region_y, self._plane, self._normal
-            ), context, event.ctrl)
+            ), self._plane, self._basis, context, event.ctrl)
             if p is None:
                 return {'RUNNING_MODAL'}
             if self._stage == 0:
                 self._first = p
                 self._stage = 1
             else:
-                if abs(p.x - self._first.x) < 0.0001 or abs(p.y - self._first.y) < 0.0001:
+                local = self._basis.transposed() @ (p - self._first)
+                if abs(local.x) < 0.0001 or abs(local.y) < 0.0001:
                     self.report({'WARNING'}, 'Base must have non-zero width and depth')
                     return {'RUNNING_MODAL'}
                 self._second = p
@@ -151,15 +193,16 @@ class POYARA_OT_box_3point(Operator):
         if abs(self._height) < 0.0001:
             self.report({'WARNING'}, 'Move cursor to give the box some height')
             return {'RUNNING_MODAL'}
-        corners = _box_points(self._first, self._second, self._height)
+        corners = _box_points(self._first, self._second, self._height, self._basis)
         origin = corners[0]
-        verts = [tuple(p - origin) for p in corners]
+        verts = [tuple(self._basis.transposed() @ (p - origin)) for p in corners]
         mesh = bpy.data.meshes.new('MaxBox')
         mesh.from_pydata(verts, _BOX_EDGES, _BOX_FACES)
         mesh.update()
         obj = bpy.data.objects.new('MaxBox', mesh)
         context.collection.objects.link(obj)
-        obj.location = origin
+        obj.matrix_world = self._basis.to_4x4()
+        obj.matrix_world.translation = origin
         obj['poyara_maxbox'] = True
         bpy.ops.object.select_all(action='DESELECT')
         obj.select_set(True)
@@ -198,7 +241,7 @@ class POYARA_OT_connect_edges(Operator):
     bl_options = {'REGISTER', 'UNDO'}
 
     segments: IntProperty(name='Segments', default=1, min=1, max=30)
-    pinch: FloatProperty(name='Pinch', default=0, min=-90, max=90, subtype='FACTOR')
+    pinch: FloatProperty(name='Pinch', default=0, min=-90, max=90)
     slide: FloatProperty(name='Slide', default=0, min=-100, max=100)
 
     @classmethod
@@ -211,7 +254,6 @@ class POYARA_OT_connect_edges(Operator):
     def execute(self, context):
         mesh = context.edit_object.data
         bm = bmesh.from_edit_mesh(mesh)
-        bm.faces.ensure_lookup_table()
         selected = [edge for edge in bm.edges if edge.select]
         if len(selected) != 2:
             self.report({'ERROR'}, 'Select exactly TWO opposite edges of one quad')
@@ -230,9 +272,30 @@ class POYARA_OT_connect_edges(Operator):
 
         a0, a1 = winding[a_index].co.copy(), winding[(a_index + 1) % 4].co.copy()
         b0, b1 = winding[(b_index + 1) % 4].co.copy(), winding[b_index].co.copy()
-        existing = set(bm.verts)
-        bmesh.ops.subdivide_edges(bm, edges=selected, cuts=self.segments, use_grid_fill=False)
-        added = [v for v in bm.verts if v not in existing]
+        # IMPORTANT: never feed freshly split verts back into connect_verts.
+        # That path can create invalid BMesh topology and has caused a hard
+        # Blender crash. Delegate the topology change to Blender's tested
+        # native edge-ring operator, then adjust *coordinates only*.
+        existing_coords = {tuple(round(x, 5) for x in v.co) for v in bm.verts}
+        try:
+            outcome = bpy.ops.mesh.subdivide_edgering(
+                number_cuts=self.segments, interpolation='LINEAR', smoothness=0.0
+            )
+        except RuntimeError as exc:
+            self.report({'ERROR'}, f'Native Connect failed: {exc}')
+            return {'CANCELLED'}
+        if 'FINISHED' not in outcome:
+            self.report({'ERROR'}, 'Blender could not subdivide this edge ring')
+            return {'CANCELLED'}
+        # The common 1-segment/zero-offset case stays 100% native: do not
+        # inspect or touch edit BMesh after the topology operator runs.
+        if abs(self.pinch) < 1e-7 and abs(self.slide) < 1e-7:
+            return {'FINISHED'}
+        bm = bmesh.from_edit_mesh(mesh)
+        # Mesh topology is now already valid. New knots are identified by
+        # geometry, never by stale BMesh references from before the operator.
+        added = [v for v in bm.verts
+                 if tuple(round(x, 5) for x in v.co) not in existing_coords]
 
         def along(v, start, end):
             direction = end - start
@@ -246,9 +309,8 @@ class POYARA_OT_connect_edges(Operator):
         a_vertices.sort(key=lambda v: along(v, a0, a1)[0])
         b_vertices.sort(key=lambda v: along(v, b0, b1)[0])
         if len(a_vertices) != self.segments or len(b_vertices) != self.segments:
-            self.report({'ERROR'}, 'Could not identify the split vertices')
-            bmesh.update_edit_mesh(mesh, loop_triangles=False, destructive=True)
-            return {'CANCELLED'}
+            self.report({'WARNING'}, 'Connect created; Pinch/Slide skipped for this topology')
+            return {'FINISHED'}
 
         fractions = [(i + 1) / (self.segments + 1) for i in range(self.segments)]
         spread = 1.0 + self.pinch / 100.0
@@ -261,9 +323,44 @@ class POYARA_OT_connect_edges(Operator):
         for av, bv, t in zip(a_vertices, b_vertices, fractions):
             av.co = a0.lerp(a1, t)
             bv.co = b0.lerp(b1, t)
-        for av, bv in zip(a_vertices, b_vertices):
-            bmesh.ops.connect_verts(bm, verts=[av, bv], check_degenerate=True)
-        bmesh.update_edit_mesh(mesh, loop_triangles=False, destructive=True)
+        bmesh.update_edit_mesh(mesh, loop_triangles=False, destructive=False)
+        return {'FINISHED'}
+
+
+class POYARA_OT_select_by_angle(Operator):
+    bl_idname = 'poyara.select_by_angle'
+    bl_label = 'Select Adjacent Polygons by Angle'
+    bl_description = 'Grow only across connected faces whose normals differ by at most Angle'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        return context.mode == 'EDIT_MESH'
+
+    def execute(self, context):
+        mesh = context.edit_object.data
+        bm = bmesh.from_edit_mesh(mesh)
+        bm.normal_update()
+        seeds = [face for face in bm.faces if face.select and not face.hide]
+        if not seeds:
+            self.report({'ERROR'}, 'Select at least one polygon before Select by Angle')
+            return {'CANCELLED'}
+        angle = math.radians(context.scene.poyara_maxline.angle_threshold)
+        visited = set(seeds)
+        stack = list(seeds)
+        while stack:
+            current = stack.pop()
+            for edge in current.edges:
+                for adjacent in edge.link_faces:
+                    if adjacent in visited or adjacent.hide:
+                        continue
+                    if current.normal.angle(adjacent.normal, math.pi) <= angle + 1e-6:
+                        visited.add(adjacent)
+                        stack.append(adjacent)
+        for face in visited:
+            face.select_set(True)
+        bmesh.update_edit_mesh(mesh, loop_triangles=False, destructive=False)
+        self.report({'INFO'}, f'Selected {len(visited)} adjacent polygons')
         return {'FINISHED'}
 
 
@@ -577,7 +674,33 @@ class POYARA_PT_extras(Panel):
         box = layout.box()
         box.label(text='Standard Primitives', icon='MESH_CUBE')
         box.operator('poyara.box_3point', text='Box | 3 Clicks')
+        box.prop(context.scene.poyara_maxline, 'surface_snap', text='AutoGrid / Surface Snap')
         box.operator('poyara.box_size', text='Box Parameters')
+        box.operator('poyara.plane', text='Plane...')
+        row = box.row(align=True)
+        row.operator('poyara.circle', text='Circle...')
+        row.operator('poyara.rectangle', text='Rectangle...')
+        box.operator('poyara.spiral', text='Spiral...')
+        arch = layout.box()
+        arch.label(text='Architecture (Archyar)', icon='HOME')
+        arch.operator('poyara.arch_wall', text='Draw Wall')
+        settings = context.scene.poyara_arch
+        col = arch.column(align=True)
+        col.prop(settings, 'wall_thickness')
+        col.prop(settings, 'wall_height')
+        col.prop(settings, 'elevation')
+        row = arch.row(align=True)
+        row.operator('poyara.arch_opening', text='Door').style = 'door'
+        row.operator('poyara.arch_opening', text='Sliding Door').style = 'sliding-door'
+        row = arch.row(align=True)
+        row.operator('poyara.arch_opening', text='Window').style = 'fixed'
+        row.operator('poyara.arch_opening', text='Sliding Window').style = 'sliding'
+        col = arch.column(align=True)
+        col.prop(settings, 'door_width')
+        col.prop(settings, 'door_height')
+        col.prop(settings, 'window_width')
+        col.prop(settings, 'window_height')
+        col.prop(settings, 'window_sill')
         box = layout.box()
         box.label(text='Boolean', icon='MOD_BOOLEAN')
         row = box.row(align=True)
@@ -597,13 +720,17 @@ class POYARA_PT_extras(Panel):
         row = box.row(align=True)
         row.operator('poyara.array', text='Array...')
         row.operator('poyara.align', text='Align...')
-        box.label(text='Future: Doors / Windows / Stairs / Railings')
+        box.operator('poyara.live_array', text='Live Array Modifier')
+        if obj and obj.type in {'MESH', 'CURVE'}:
+            draw_live_array_controls(box, obj)
+        box.label(text='Future: Stairs / Railings')
 
 
 EXTRA_CLASSES = (
     POYARA_OT_box_3point,
     POYARA_OT_box_size,
     POYARA_OT_connect_edges,
+    POYARA_OT_select_by_angle,
     POYARA_OT_extrude,
     POYARA_OT_bevel,
     POYARA_OT_curve_corner,
@@ -613,3 +740,10 @@ EXTRA_CLASSES = (
     POYARA_OT_align,
     POYARA_PT_extras,
 )
+
+from .primitives import PRIMITIVE_CLASSES
+from .architecture import ARCH_CLASSES
+from .live_tools import (LIVE_CLASSES, draw_live_array_controls,
+                         draw_live_mesh_controls, draw_live_curve_controls)
+
+EXTRA_CLASSES += PRIMITIVE_CLASSES + ARCH_CLASSES + LIVE_CLASSES

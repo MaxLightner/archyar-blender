@@ -3,7 +3,7 @@
 bl_info = {
     "name": "POYARA MaxLine | Edit Spline + Edit Poly",
     "author": "POYARA",
-    "version": (0, 1, 0),
+    "version": (0, 2, 0),
     "blender": (4, 3, 0),
     "location": "3D View > Sidebar (N) > POYARA",
     "description": "3ds Max-like Edit Spline and Edit Poly panels with interactive line editing",
@@ -202,10 +202,15 @@ def _draw_overlay(operator, context, preview=None):
 class POYARA_PG_settings(PropertyGroup):
     tab: EnumProperty(
         name='Mode',
-        items=[('EDIT_POLY', 'Edit Poly', 'Mesh tools'),
-               ('EDIT_SPLINE', 'Edit Line', 'Spline tools'),
-               ('EXTRAS', 'Extras', 'Creation and object tools')],
-        default='EDIT_SPLINE',
+        items=[('EXTRAS', 'Extras', 'Creation and object tools'),
+               ('EDIT_POLY', 'Edit Poly', 'Mesh tools'),
+               ('EDIT_SPLINE', 'Edit Line', 'Spline tools')],
+        default='EXTRAS',
+    )
+    surface_snap: BoolProperty(
+        name='AutoGrid / Surface Snap',
+        description='Place the box base on the first mesh surface under the mouse',
+        default=True,
     )
     selection_mode: EnumProperty(
         name='Sub-Object',
@@ -215,6 +220,10 @@ class POYARA_PG_settings(PropertyGroup):
         default='VERTEX',
     )
     snap_step: FloatProperty(name='Ctrl Snap (m)', default=0.01, min=0.001, max=10.0, precision=3)
+    angle_threshold: FloatProperty(
+        name='Angle', description='Maximum angle between adjacent polygon normals',
+        default=5.0, min=0.0, max=180.0, precision=1,
+    )
 
 
 class POYARA_OT_draw_line(Operator):
@@ -603,13 +612,38 @@ class POYARA_OT_mesh_level(Operator):
                 'FACE': 'FACE', 'ELEMENT': 'FACE'}[self.level]
         bpy.ops.mesh.select_mode(type=kind)
         if self.level == 'BORDER':
-            bpy.ops.mesh.select_all(action='DESELECT')
-            bpy.ops.mesh.select_non_manifold(extend=False, use_wire=False, use_boundary=True,
-                                            use_multi_face=False, use_non_contiguous=False,
-                                            use_verts=False)
+            # A sub-object level switch must never destroy an existing
+            # selection or unexpectedly select every open edge in the model.
+            self.report({'INFO'}, 'Border: Edge mode; use Boundary from Faces to select a region outline')
         elif self.level == 'ELEMENT':
-            bpy.ops.mesh.select_linked()
+            # Preserve the existing face selection, then grow only its
+            # connected island (if there is a seed), like Max Element mode.
+            bm = bmesh.from_edit_mesh(context.edit_object.data)
+            if any(face.select for face in bm.faces):
+                bpy.ops.mesh.select_linked()
         return {'FINISHED'}
+
+
+class POYARA_OT_face_boundary(Operator):
+    bl_idname = 'poyara.face_boundary'
+    bl_label = 'Boundary from Selected Faces'
+    bl_description = 'Convert selected polygon region to its outline edges (Blender Region to Loop)'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        return context.mode == 'EDIT_MESH'
+
+    def execute(self, context):
+        if not context.tool_settings.mesh_select_mode[2]:
+            self.report({'WARNING'}, 'Select polygons in Polygon mode first')
+            return {'CANCELLED'}
+        mesh = context.edit_object.data
+        bm = bmesh.from_edit_mesh(mesh)
+        if not any(face.select for face in bm.faces):
+            self.report({'WARNING'}, 'Select one or more polygons first')
+            return {'CANCELLED'}
+        return bpy.ops.mesh.region_to_loop()
 
 
 class POYARA_OT_mode_toggle(Operator):
@@ -676,6 +710,12 @@ class POYARA_PT_spline(Panel):
         row = col.row(align=True)
         row.operator('poyara.curve_corner', text='Fillet...').kind = 'FILLET'
         row.operator('poyara.curve_corner', text='Chamfer...').kind = 'CHAMFER'
+        row = col.row(align=True)
+        row.operator('poyara.live_curve_corner', text='Live Fillet').kind = 'FILLET'
+        row.operator('poyara.live_curve_corner', text='Live Chamfer').kind = 'CHAMFER'
+        if context.active_object:
+            from .live_tools import draw_live_curve_controls
+            draw_live_curve_controls(col, context.active_object)
         col = layout.box().column(align=True)
         col.label(text='Edit Vertices / Segments / Splines')
         native = col.column(align=True)
@@ -684,6 +724,9 @@ class POYARA_PT_spline(Panel):
         row = native.row(align=True)
         row.operator('curve.subdivide', text='Refine')
         row.operator('curve.make_segment', text='Connect')
+        row = native.row(align=True)
+        row.operator('curve.select_more', text='Grow')
+        row.operator('curve.select_less', text='Shrink')
         row = native.row(align=True)
         row.operator('curve.dissolve_verts', text='Remove')
         row.operator('curve.delete', text='Delete').type = 'VERT'
@@ -720,6 +763,17 @@ class POYARA_PT_poly(Panel):
         row = box.row(align=True)
         for level, name in [('FACE', 'Polygon'), ('ELEMENT', 'Element')]:
             row.operator('poyara.mesh_level', text=name).level = level
+        select = box.column(align=True)
+        select.enabled = context.mode == 'EDIT_MESH'
+        row = select.row(align=True)
+        row.operator('mesh.select_more', text='Grow', icon='ADD')
+        row.operator('mesh.select_less', text='Shrink', icon='REMOVE')
+        row = select.row(align=True)
+        row.operator('mesh.loop_multi_select', text='Loop').ring = False
+        row.operator('mesh.loop_multi_select', text='Ring').ring = True
+        select.operator('poyara.face_boundary', text='Boundary from Selected Faces')
+        select.prop(context.scene.poyara_maxline, 'angle_threshold', slider=True)
+        select.operator('poyara.select_by_angle', text='Select Adjacent by Angle')
         box = layout.box()
         box.label(text='Edit Vertices / Edges', icon='EDITMODE_HLT')
         col = box.column(align=True)
@@ -734,6 +788,11 @@ class POYARA_PT_poly(Panel):
         row = col.row(align=True)
         row.operator('poyara.bevel', text='Chamfer...').kind = 'CHAMFER'
         row.operator('poyara.bevel', text='Fillet...').kind = 'FILLET'
+        row = box.row(align=True)
+        row.operator('poyara.live_mesh_bevel', text='Live Chamfer').kind = 'CHAMFER'
+        row.operator('poyara.live_mesh_bevel', text='Live Fillet').kind = 'FILLET'
+        from .live_tools import draw_live_mesh_controls
+        draw_live_mesh_controls(box, context.active_object)
         row = col.row(align=True)
         row.operator('mesh.subdivide', text='Subdivide')
         row.operator('mesh.bridge_edge_loops', text='Bridge')
@@ -768,6 +827,7 @@ _CLASSES = (
     POYARA_OT_edit_spline,
     POYARA_OT_set_vertex_xyz,
     POYARA_OT_mesh_level,
+    POYARA_OT_face_boundary,
     POYARA_OT_mode_toggle,
     POYARA_PT_command_panel,
     POYARA_PT_spline,
@@ -775,6 +835,8 @@ _CLASSES = (
 )
 
 from .extras import EXTRA_CLASSES
+from .architecture import register_properties as register_arch_properties
+from .architecture import unregister_properties as unregister_arch_properties
 _CLASSES += EXTRA_CLASSES
 
 
@@ -782,9 +844,11 @@ def register():
     for cls in _CLASSES:
         bpy.utils.register_class(cls)
     bpy.types.Scene.poyara_maxline = PointerProperty(type=POYARA_PG_settings)
+    register_arch_properties()
 
 
 def unregister():
+    unregister_arch_properties()
     del bpy.types.Scene.poyara_maxline
     for cls in reversed(_CLASSES):
         bpy.utils.unregister_class(cls)
